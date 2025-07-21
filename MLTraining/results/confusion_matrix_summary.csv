@@ -1,0 +1,5 @@
+,pred principiante,pred intermedio,pred experto,class recall
+true principiante,89,1,0,98.46%
+true intermedio,1,89,0,98.67%
+true experto,0,1,89,98.90%
+class precision,98.68%,97.40%,100.00%,

@@ -1,0 +1,3 @@
+/models/
+*.db
+src/db/init_db.py
