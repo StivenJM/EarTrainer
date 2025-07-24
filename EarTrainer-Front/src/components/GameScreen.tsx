@@ -2,8 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Music, Check, X, LogOut, RotateCcw, Volume2 } from 'lucide-react';
 import Piano from './Piano';
 import OwlCharacter from './OwlCharacter';
-import { Note, AudioContextRef } from '../types';
+import { Note, AudioContextRef, Difficulty } from '../types';
 import { playScale, playNote, playTriad, stopAllAudio } from '../utils/audio';
+import { useDispatch, useSelector } from 'react-redux';
+import { AppDispatch, RootState } from '../redux/store';
+import { useApi } from '../hooks/useApi';
+import { CrearSesionRequest, CrearSesionResponse, EntrenarModeloRequest, EntrenarModeloResponse, RegistrarIntentoResponse, SugerirEjercicioRequest, SugerirEjercicioResponse, TerminarSesionResponse } from '../models/apiService.model';
+import { crearSesion, entrenarModelo, registrarIntento, sugerirEjercicio, terminarSesion } from '../services/api.service';
+import { endSession, startSession } from '../redux/states/user';
+import { Intento } from '../models';
 
 interface GameScreenProps {
   playerName: string;
@@ -20,16 +27,14 @@ const GameScreen: React.FC<GameScreenProps> = ({
   onEndGame, 
   onExitGame 
 }) => {
+  console.log("PUNTO INICIAL")
   const [score, setScore] = useState(0);
-  const [currentNote, setCurrentNote] = useState<Note | null>(null);
   const [status, setStatus] = useState<'initial' | 'playing' | 'guessing' | 'feedback'>('initial');
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
   const [round, setRound] = useState(1);
   const totalRounds = difficulty === 'easy' ? 5 : 10;
-  const [message, setMessage] = useState('');
-  const [availableNotes, setAvailableNotes] = useState<Note[]>([]);
+  const [message, setMessage] = useState('')
   const [showExitConfirm, setShowExitConfirm] = useState(false);
-  const [usedNotes, setUsedNotes] = useState<Note[]>([]); // Track used notes to avoid repetition
   const [owlMood, setOwlMood] = useState<'happy' | 'excited' | 'thinking' | 'celebrating' | 'encouraging'>('happy');
   const [owlMessage, setOwlMessage] = useState('');
   const audioContextRef = useRef<AudioContextRef>({ 
@@ -41,7 +46,131 @@ const GameScreen: React.FC<GameScreenProps> = ({
   // Store cleanup functions for audio sequences
   const audioCleanupRef = useRef<(() => void) | null>(null);
 
-  const allNotes: Note[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+  const sessionApi = useApi<CrearSesionResponse, CrearSesionRequest>(crearSesion)
+  const terminarSesionApi = useApi<TerminarSesionResponse, number>(terminarSesion)
+  const sugerirEjercicioApi = useApi<SugerirEjercicioResponse, SugerirEjercicioRequest>(sugerirEjercicio)
+  const registrarIntentoApi = useApi<RegistrarIntentoResponse, Intento>(registrarIntento)
+  const entrenarModeloApi = useApi<EntrenarModeloResponse, EntrenarModeloRequest>(entrenarModelo)
+
+  const idUser = useSelector((state: RootState) => state.user.idUser)
+  const userDispatch = useDispatch<AppDispatch>()
+
+  const sessionIdRef = useRef<number | null>(null);
+  const userIdRef = useRef<number>(idUser);
+  const startTimeRef = useRef<number | null>(null);
+  
+  const sessionInitialized = useRef(false);
+
+  console.log("idUser:", idUser)
+  console.log("sessionApi.data:", sessionApi.data)
+  console.log("PUNTO INICIAL 2")
+
+  useEffect(() => {
+    console.log("useEffect 1:", idUser)
+    if (!sessionInitialized.current && idUser != 0) {
+      sessionInitialized.current = true;
+
+      sessionApi.fetch({userId: idUser, dificultad: difficulty as Difficulty})
+      userDispatch(startSession())
+    }
+  }, [idUser])
+
+  useEffect(() => {
+    console.log("useEffect 2:", sessionApi.data)
+    if (sessionApi.data?.session_id) {
+      sessionIdRef.current = sessionApi.data.session_id;
+    }
+  }, [sessionApi.data]);
+
+  useEffect(() => {
+    console.log("useEffect 3:")
+    console.log("\t\tsession", sessionIdRef.current)
+    console.log("\t\tisUser", idUser)
+    return () => {
+      console.log("Return useEffect 3: ")
+      console.log("\t\tsession", sessionIdRef.current)
+      console.log("\t\tisUser", idUser)
+      const sessionId = sessionIdRef.current
+      const userId = userIdRef.current;
+      if (sessionId) {
+        terminarSesionApi.fetch(sessionId);
+        entrenarModeloApi.fetch({userId: userId, sessionId: sessionId})
+      }
+      userDispatch(endSession());
+    };
+  }, [])
+
+  useEffect(() => {
+    if (idUser != 0) {
+      // Set available notes based on difficulty
+      const numDistractores = getNumDistractores(difficulty)
+      sugerirEjercicioApi.fetch({userId: idUser, numDistractores})
+    }
+  }, [idUser])
+
+  useEffect(() => {
+    if (sugerirEjercicioApi.data) {
+      const timer = setTimeout(() => {
+        initializeGame();
+      }, 2000);
+      return () => {
+        clearTimeout(timer);
+
+
+        // Clean up audio when component unmounts
+        stopAllAudio();
+        if (audioCleanupRef.current) {
+          audioCleanupRef.current();
+        }
+      }
+    }
+  }, [sugerirEjercicioApi.data]);
+
+    // Handle Arduino input with audio feedback
+  useEffect(() => {
+    const availableNotes = sugerirEjercicioApi.data?.distractores.concat(sugerirEjercicioApi.data?.objetivo || []) || [];
+    const handleArduinoData = (event: any) => {
+      const { pin } = event.detail;
+      const note = pinToNote[pin];
+      
+      if (note) {
+        // Always play the note sound when Arduino button is pressed
+        playNote(audioContextRef.current, note, 0.3);
+        
+        // Only process as guess if we're in guessing state and note is available
+        if (status === 'guessing' && availableNotes.includes(note)) {
+          handleNoteGuess(note);
+        }
+      }
+    };
+
+    if (arduinoPort) {
+      window.addEventListener('arduinoData', handleArduinoData);
+    }
+
+    return () => {
+      window.removeEventListener('arduinoData', handleArduinoData);
+    };
+  }, [status, sugerirEjercicioApi.data, score, round, arduinoPort, sugerirEjercicioApi.data]);
+
+  useEffect(() => {
+    // Start the first round after a delay
+    setOwlMood('excited');
+    setOwlMessage(`🎮 ¡Empezamos el juego! Nivel: ${getDifficultyDescription()}. ¡Tú puedes hacerlo!`);
+    return () => {
+      stopAllAudio();
+      if (audioCleanupRef.current) {
+        audioCleanupRef.current();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (status === 'feedback' && round >= totalRounds) {
+      endGame();
+    }
+  }, [score, round, status]);
+
   const noteNames: { [key in Note]: string } = {
     'C': 'Do',
     'D': 'Re',
@@ -64,16 +193,16 @@ const GameScreen: React.FC<GameScreenProps> = ({
   };
 
   // Get available notes based on difficulty
-  const getAvailableNotes = (difficulty: string): Note[] => {
+  const getNumDistractores = (difficulty: string): number => {
     switch (difficulty) {
       case 'easy':
-        return ['C', 'E', 'G']; // Do, Mi, Sol (triada)
+        return 2
       case 'medium':
-        return ['C', 'E', 'F', 'G']; // Do, Mi, Fa, Sol
+        return 3
       case 'hard':
-        return ['C', 'D', 'E', 'F', 'G', 'A', 'B']; // Todas las notas
+        return 6 // Todas las notas
       default:
-        return ['C', 'E', 'G'];
+        return 2; // Default to easy
     }
   };
 
@@ -90,54 +219,29 @@ const GameScreen: React.FC<GameScreenProps> = ({
     // Initialize Audio Context
     initializeAudioContext();
     
-    // Set available notes based on difficulty
-    const notes = getAvailableNotes(difficulty);
-    setAvailableNotes(notes);
-    
     setStatus('playing');
     
     if (difficulty === 'easy') {
       setMessage('Escuchando la tríada de Do Mayor (Do-Mi-Sol)...');
       setOwlMessage(`¡Empezamos el juego! Nivel: ${getDifficultyDescription()}. ¡Tú puedes hacerlo!`);
       audioCleanupRef.current = playTriad(audioContextRef.current, () => {
-        selectRandomNote(notes);
+        selectRandomNote();
       });
     } else {
       setMessage('Escuchando la escala de Do Mayor...');
       // Play full scale
       audioCleanupRef.current = playScale(audioContextRef.current, () => {
-        selectRandomNote(notes);
+        selectRandomNote();
       });
     }
   };
 
-  const selectRandomNote = (notes: Note[]) => {
-    let availableForSelection = [...notes];
-    
+  const selectRandomNote = () => {
     setOwlMood('thinking');
     setOwlMessage('Mmm... ¿qué nota será esta vez? ¡Escucha con atención!');
     
-    // If we've used all notes, reset the used notes array
-    if (usedNotes.length >= notes.length) {
-      setUsedNotes([]);
-    } else {
-      // Remove already used notes from selection
-      availableForSelection = notes.filter(note => !usedNotes.includes(note));
-    }
-    
-    // If no notes available (shouldn't happen), use all notes
-    if (availableForSelection.length === 0) {
-      availableForSelection = [...notes];
-      setUsedNotes([]);
-    }
-    
-    const randomIndex = Math.floor(Math.random() * availableForSelection.length);
-    const note = availableForSelection[randomIndex];
-    
-    // Add this note to used notes
-    setUsedNotes(prev => [...prev, note]);
-    
-    setCurrentNote(note);
+    const note = sugerirEjercicioApi.data?.objetivo || "A";
+
     setStatus('guessing');
     setMessage(`¿Qué nota acabo de tocar? ¡Tú puedes!`);
     
@@ -145,24 +249,41 @@ const GameScreen: React.FC<GameScreenProps> = ({
     setOwlMessage('¡Escucha bien! Ahora haz clic en la tecla que crees que es la correcta.');
 
     // Play the random note
+    startTimeRef.current = performance.now(); // para medir el tiempo
     playNote(audioContextRef.current, note, 1);
   };
 
   const handleNoteGuess = (guessedNote: Note) => {
     if (status !== 'guessing') return;
     
-    if (guessedNote === currentNote) {
+    const endTime = performance.now();
+    const responseTime = startTimeRef.current ? (endTime - startTimeRef.current) / 1000 : 0; // en segundos
+
+    if (guessedNote === sugerirEjercicioApi.data?.objetivo) {
       setFeedback('correct');
       setOwlMood('celebrating');
       setScore(prevScore => prevScore + 1);
-      setMessage(`¡Excelente! Era ${noteNames[currentNote!]}`);
-      setOwlMessage(`¡Fantástico! Reconociste la nota ${noteNames[currentNote!]}. ¡Sigue así, pequeño músico!`);
+      setMessage(`¡Excelente! Era ${noteNames[sugerirEjercicioApi.data?.objetivo!]}`);
+      setOwlMessage(`¡Fantástico! Reconociste la nota ${noteNames[sugerirEjercicioApi.data?.objetivo!]}. ¡Sigue así, pequeño músico!`);
     } else {
       setFeedback('incorrect');
       setOwlMood('encouraging');
-      setMessage(`¡Casi! Era ${noteNames[currentNote!]}, tú elegiste ${noteNames[guessedNote]}`);
+      setMessage(`¡Casi! Era ${noteNames[sugerirEjercicioApi.data?.objetivo!]}, tú elegiste ${noteNames[guessedNote]}`);
       setOwlMessage(`No te preocupes, los errores nos ayudan a aprender. ¡La próxima vez lo harás mejor!`);
     }
+
+    registrarIntentoApi.fetch({
+      sessionId: sessionIdRef.current!,
+      notaCorrecta: sugerirEjercicioApi.data?.objetivo!, 
+      notasMostradas: sugerirEjercicioApi.data?.distractores.concat(sugerirEjercicioApi.data?.objetivo || []) || [],
+      notaElegida: guessedNote, 
+      tiempoRespuesta: responseTime,
+      esCorrecto: guessedNote === sugerirEjercicioApi.data?.objetivo, 
+    })
+
+    // Set available notes based on difficulty
+    const numDistractores = getNumDistractores(difficulty)
+    sugerirEjercicioApi.fetch({userId: idUser, numDistractores})
 
     setStatus('feedback');
     
@@ -176,16 +297,15 @@ const GameScreen: React.FC<GameScreenProps> = ({
         setStatus('initial');
         setMessage('¡Prepárate para la siguiente nota!');
         setOwlMessage('¡Vamos por la siguiente! Cada vez lo haces mejor.');
-        setTimeout(() => initializeGame(), 1500);
       }
     }, 2500);
   };
 
   const replayCurrentNote = () => {
-    if (currentNote && status === 'guessing') {
+    if (sugerirEjercicioApi.data?.objetivo && status === 'guessing') {
       setOwlMood('happy');
       setOwlMessage('¡Buena idea! Escucha otra vez la nota.');
-      playNote(audioContextRef.current, currentNote, 1);
+      playNote(audioContextRef.current, sugerirEjercicioApi.data?.objetivo, 1);
     }
   };
 
@@ -233,55 +353,6 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const cancelExit = () => {
     setShowExitConfirm(false);
   };
-
-  // Handle Arduino input with audio feedback
-  useEffect(() => {
-    const handleArduinoData = (event: any) => {
-      const { pin } = event.detail;
-      const note = pinToNote[pin];
-      
-      if (note) {
-        // Always play the note sound when Arduino button is pressed
-        playNote(audioContextRef.current, note, 0.3);
-        
-        // Only process as guess if we're in guessing state and note is available
-        if (status === 'guessing' && availableNotes.includes(note)) {
-          handleNoteGuess(note);
-        }
-      }
-    };
-
-    if (arduinoPort) {
-      window.addEventListener('arduinoData', handleArduinoData);
-    }
-
-    return () => {
-      window.removeEventListener('arduinoData', handleArduinoData);
-    };
-  }, [status, currentNote, score, round, arduinoPort, availableNotes]);
-
-  useEffect(() => {
-    // Start the first round after a delay
-    setOwlMood('excited');
-    setOwlMessage(`🎮 ¡Empezamos el juego! Nivel: ${getDifficultyDescription()}. ¡Tú puedes hacerlo!`);
-    const timer = setTimeout(() => {
-      initializeGame();
-    }, 2000);
-    return () => {
-      clearTimeout(timer);
-      // Clean up audio when component unmounts
-      stopAllAudio();
-      if (audioCleanupRef.current) {
-        audioCleanupRef.current();
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (status === 'feedback' && round >= totalRounds) {
-      endGame();
-    }
-  }, [score, round, status]);
 
   const getDifficultyDescription = () => {
     switch (difficulty) {
@@ -383,9 +454,14 @@ const GameScreen: React.FC<GameScreenProps> = ({
         </div>
         
         {/* Piano Interface */}
+        <p>Sesion: {sessionApi.data?.session_id || 'nada'}</p>
+        <p>Error: {sessionApi.error?.message || 'nada'}</p>
+        <p>Nota: {sugerirEjercicioApi.data?.objetivo || 'nada'}</p>
+        <p>Dis: {sugerirEjercicioApi.data?.distractores || 'nada'}</p>
+
         <div className="mb-6">
           <Piano
-            availableNotes={availableNotes}
+            availableNotes={sugerirEjercicioApi.data?.distractores.concat(sugerirEjercicioApi.data?.objetivo || []) || []}
             onNoteClick={handleNoteGuess}
             audioContextRef={audioContextRef}
             disabled={status !== 'guessing'}
@@ -398,7 +474,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
           <div className="text-center text-lg text-purple-700 bg-gradient-to-br from-yellow-100 to-orange-100 p-6 rounded-2xl border-2 border-yellow-300">
             <p className="font-bold mb-3 text-xl">¿Cómo jugar?</p>
             <p className="font-semibold">Haz clic en las teclas del piano para elegir la nota que escuchaste</p>
-            {availableNotes.length < 7 && (
+            {sugerirEjercicioApi.data && sugerirEjercicioApi.data.distractores.length < 6 && (
               <p className="text-green-600 mt-3 font-bold">
                 Solo las teclas con punto verde están disponibles
               </p>

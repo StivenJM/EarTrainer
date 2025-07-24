@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from src.ml.predictor import UserModelManager
-from src.schemas import IntentoInput, CrearSesionInput, CrearSesionResponse
+from src.schemas import IntentoInput, CrearSesionInput, CrearSesionResponse, CerrarSesionInput, CerrarSesionResponse
 from src.db import crud
 from datetime import datetime
 
@@ -18,15 +18,15 @@ async def crear_sesion(data: CrearSesionInput):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-@router.post("/terminar")
-async def cerrar_sesion(session_id: int):
+@router.post("/terminar", response_model=CerrarSesionResponse)
+async def cerrar_sesion(data: CerrarSesionInput):
     """
     Marca la sesión de entrenamiento como finalizada (agrega finished_at).
     """
     try:
         # Asegura que finished_at sea un datetime sin zona horaria (naive)
         finished_at = datetime.now().replace(tzinfo=None)
-        await crud.update_training_session(session_id=session_id, finished_at=finished_at)
+        await crud.update_training_session(session_id=data.session_id, finished_at=finished_at)
         return {"success": True, "message": "Sesión cerrada correctamente"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

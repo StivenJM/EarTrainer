@@ -24,6 +24,13 @@ class CrearSesionInput(BaseModel):
 class CrearSesionResponse(BaseModel):
     session_id: int
 
+class CerrarSesionInput(BaseModel):
+    session_id: int
+    
+class CerrarSesionResponse(BaseModel):
+    success: bool
+    message: str
+
 class CrearUsuarioInput(BaseModel):
     username: str
 

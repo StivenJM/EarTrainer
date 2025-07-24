@@ -3,6 +3,8 @@ import { Music, Trophy, Play, BookOpen } from 'lucide-react';
 import ArduinoConnect from './ArduinoConnect';
 import TutorialModal from './TutorialModal';
 import OwlCharacter from './OwlCharacter';
+import { useSelector } from 'react-redux';
+import { RootState } from '../redux/store';
 
 interface WelcomeScreenProps {
   onStartGame: (name: string, difficulty: string, arduinoPort: any | null) => void;
@@ -10,7 +12,9 @@ interface WelcomeScreenProps {
 }
 
 const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStartGame, onShowHighScores }) => {
-  const [name, setName] = useState('');
+  const username = useSelector((state: RootState) => state.user.username)
+
+  const [name, setName] = useState(username);
   const [difficulty, setDifficulty] = useState('easy');
   const [error, setError] = useState('');
   const [arduinoPort, setArduinoPort] = useState<any | null>(null);
@@ -29,6 +33,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStartGame, onShowHighSc
       setError('Por favor, introduce tu nombre');
       return;
     }
+
     onStartGame(name, difficulty, arduinoPort);
   };
 
@@ -123,7 +128,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStartGame, onShowHighSc
               <BookOpen size={24} />
               <span>¡Enséñame a jugar!</span>
             </button>
-            
+
             <button
               type="submit"
               className="w-full py-3 px-6 bg-gradient-to-r from-green-400 to-blue-500 hover:from-green-500 hover:to-blue-600 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-3 text-lg"
