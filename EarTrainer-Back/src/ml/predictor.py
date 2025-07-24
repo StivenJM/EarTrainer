@@ -2,6 +2,7 @@ import os
 import pickle
 import numpy as np
 from sklearn.linear_model import SGDClassifier
+import random
 from src.config import NOTAS_DISPONIBLES, MODELS_DIR
 from src.schemas import SugerenciaResponse
 from src.db import crud
@@ -46,6 +47,14 @@ class UserModelManager:
             vec[idx] = 1
         return vec
 
+    def _mostradas_one_hot(self, notas_mostradas: list[str]):
+        vec = np.zeros(len(NOTAS_DISPONIBLES))
+        for n in notas_mostradas:
+            if n in NOTAS_DISPONIBLES:
+                idx = NOTAS_DISPONIBLES.index(n)
+                vec[idx] = 1
+        return vec
+
     def _features(self, nota_correcta, notas_mostradas, nota_elegida, tiempo_respuesta, dificultad):
         # nota_correcta: str
         # notas_mostradas: list[str]
@@ -58,7 +67,7 @@ class UserModelManager:
         # One-hot de la nota elegida
         elegida_vec = self._one_hot(nota_elegida)
         # One-hot de las notas mostradas (concatenadas)
-        mostradas_vec = np.concatenate([self._one_hot(n) for n in notas_mostradas])
+        mostradas_vec = self._mostradas_one_hot(notas_mostradas)
         # Normaliza tiempo y dificultad
         tiempo = float(tiempo_respuesta)
         dificultad = float(dificultad)
@@ -104,37 +113,44 @@ class UserModelManager:
     async def sugerir_ejercicio(self, user_id: int, num_distractores=2):
         await self._load_model(user_id)
         model = self.models[user_id]
+        last_attempts = await crud.get_last_n_note_attempts(user_id=user_id, n=3)
+        last_notes = [attempt["nota_correcta"] for attempt in last_attempts] if last_attempts else []
+
+        # Obtener última entrada para comparar distractores
+        last_entry = last_attempts[0] if last_attempts else None
+        last_mostradas = last_entry["notas_mostradas"] if last_entry else []
+        last_distractores = [n for n in last_mostradas if n != last_entry["nota_correcta"]] if last_entry else []
+
+        objetivo = np.random.choice([n for n in NOTAS_DISPONIBLES if n not in last_notes])
 
         # Si no hay modelo, sugiere aleatorio
         if model is None:
-            objetivo = np.random.choice(NOTAS_DISPONIBLES)
             distractores = list(np.random.choice([n for n in NOTAS_DISPONIBLES if n != objetivo], num_distractores, replace=False))
             return SugerenciaResponse(objetivo=objetivo, distractores=distractores)
 
-        peor_nota = None
         peor_prob = -1
         mejor_distractores = None
 
-        for nota in NOTAS_DISPONIBLES:
-            posibles_distractores = [n for n in NOTAS_DISPONIBLES if n != nota]
-            # Probar todas las combinaciones posibles de distractores
-            if len(posibles_distractores) < num_distractores:
-                continue
-            from itertools import combinations
-            for distractores_tuple in combinations(posibles_distractores, num_distractores):
-                distractores = list(distractores_tuple)
-                notas_mostradas = [nota] + distractores
-                # Simular que el usuario elige la nota correcta (para contexto)
-                X = self._features(nota, notas_mostradas, nota, 1.0, 1.0)
-                prob_error = model.predict_proba(X)[0][1]  # probabilidad de equivocarse
-                if prob_error > peor_prob:
-                    peor_prob = prob_error
-                    peor_nota = nota
-                    mejor_distractores = distractores
+        posibles_distractores = [n for n in NOTAS_DISPONIBLES if n != objetivo]
+        # Probar todas las combinaciones posibles de distractores
+        from itertools import combinations
+        for distractores_tuple in combinations(posibles_distractores, num_distractores):
+            distractores = list(distractores_tuple)
+            notas_mostradas = [objetivo] + distractores
+            # Simular que el usuario elige la nota correcta (para contexto)
+            X = self._features(objetivo, notas_mostradas, objetivo, 1.0, 1.0)
+            prob_error = model.predict_proba(X)[0][1]  # probabilidad de equivocarse
+            if prob_error > peor_prob:
+                peor_prob = prob_error
+                mejor_distractores = distractores
 
-        if peor_nota and mejor_distractores:
-            return SugerenciaResponse(objetivo=peor_nota, distractores=mejor_distractores)
+        if mejor_distractores:
+            # Nueva regla: evitar repetir distractores anteriores exactamente
+            if set(mejor_distractores) == set(last_distractores):
+                mejor_distractores = random.sample(posibles_distractores, num_distractores)
+
+            return SugerenciaResponse(objetivo=objetivo, distractores=mejor_distractores)
         else:
-            objetivo = np.random.choice(NOTAS_DISPONIBLES)
             distractores = list(np.random.choice([n for n in NOTAS_DISPONIBLES if n != objetivo], num_distractores, replace=False))
             return SugerenciaResponse(objetivo=objetivo, distractores=distractores)
+

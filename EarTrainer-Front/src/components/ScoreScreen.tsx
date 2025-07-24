@@ -1,53 +1,56 @@
-import React, { useEffect, useState } from 'react';
-import { Trophy, ArrowLeft, Star, Award } from 'lucide-react';
-import OwlCharacter from './OwlCharacter';
-import { ScoreEntry } from '../types';
+import React, { useEffect, useState } from 'react'
+import { ArrowLeft } from 'lucide-react'
+import OwlCharacter from './OwlCharacter'
+import { ScoreEntry } from '../types'
+import { useSelector } from 'react-redux'
+import { RootState } from '../redux/store'
 
 interface ScoreScreenProps {
-  playerName: string;
-  score: number;
-  totalQuestions: number;
-  difficulty: string;
-  onPlayAgain: () => void;
+  score: number
+  totalQuestions: number
+  difficulty: string
+  onPlayAgain: () => void
 }
 
 const ScoreScreen: React.FC<ScoreScreenProps> = ({ 
-  playerName, 
   score, 
   totalQuestions,
   difficulty,
   onPlayAgain 
 }) => {
-  const [highScores, setHighScores] = useState<ScoreEntry[]>([]);
-  const percentage = Math.round((score / totalQuestions) * 100);
-  const [owlMood, setOwlMood] = useState<'happy' | 'excited' | 'thinking' | 'celebrating' | 'encouraging'>('celebrating');
-  const [owlMessage, setOwlMessage] = useState('');
-  const [scoreSaved, setScoreSaved] = useState(false);
-  const [sessionId] = useState(() => `${playerName}-${Date.now()}-${Math.random()}`);
+  // Redux state
+  const username = useSelector((state: RootState) => state.user.username)
+
+  const [highScores, setHighScores] = useState<ScoreEntry[]>([])
+  const percentage = Math.round((score / totalQuestions) * 100)
+  const [owlMood, setOwlMood] = useState<'happy' | 'excited' | 'thinking' | 'celebrating' | 'encouraging'>('celebrating')
+  const [owlMessage, setOwlMessage] = useState('')
+  const [scoreSaved, setScoreSaved] = useState(false)
+  const [sessionId] = useState(() => `${username}-${Date.now()}-${Math.random()}`)
   
   useEffect(() => {
     // Set owl message based on performance
     if (percentage === 100) {
-      setOwlMood('celebrating');
-      setOwlMessage('¡PERFECTO! ¡Eres un genio musical! No te equivocaste ni una sola vez. ¡Increíble!');
+      setOwlMood('celebrating')
+      setOwlMessage('¡PERFECTO! ¡Eres un genio musical! No te equivocaste ni una sola vez. ¡Increíble!')
     } else if (percentage >= 80) {
-      setOwlMood('celebrating');
-      setOwlMessage('¡Excelente trabajo! Tienes un oído musical fantástico. ¡Sigue practicando!');
+      setOwlMood('celebrating')
+      setOwlMessage('¡Excelente trabajo! Tienes un oído musical fantástico. ¡Sigue practicando!')
     } else if (percentage >= 60) {
-      setOwlMood('happy');
-      setOwlMessage('¡Muy bien! Vas por buen camino. Con más práctica serás un experto.');
+      setOwlMood('happy')
+      setOwlMessage('¡Muy bien! Vas por buen camino. Con más práctica serás un experto.')
     } else {
-      setOwlMood('encouraging');
-      setOwlMessage('¡No te rindas! Cada error te ayuda a aprender. ¡La próxima vez lo harás mejor!');
+      setOwlMood('encouraging')
+      setOwlMessage('¡No te rindas! Cada error te ayuda a aprender. ¡La próxima vez lo harás mejor!')
     }
     
     // Get existing scores from localStorage
-    const existingScores = localStorage.getItem('musicalEarHighScores');
-    let scores: ScoreEntry[] = existingScores ? JSON.parse(existingScores) : [];
+    const existingScores = localStorage.getItem('musicalEarHighScores')
+    let scores: ScoreEntry[] = existingScores ? JSON.parse(existingScores) : []
     
     // Add current score with unique session ID
     const newScore: ScoreEntry = {
-      playerName,
+      playerName: username,
       score,
       totalQuestions,
       percentage,
@@ -55,62 +58,62 @@ const ScoreScreen: React.FC<ScoreScreenProps> = ({
       date: new Date().toLocaleString(),
       timestamp: Date.now(),
       sessionId
-    };
+    }
 
     if (!scoreSaved) {
       if (!scores.some(s => s.sessionId === newScore.sessionId)) {
-        scores.push(newScore);
-        setScoreSaved(true);
+        scores.push(newScore)
+        setScoreSaved(true)
       }
     }
     
     // Sort by percentage (highest first), then by difficulty
     scores.sort((a, b) => {
       if (b.percentage !== a.percentage) {
-        return b.percentage - a.percentage;
+        return b.percentage - a.percentage
       }
       // If same percentage, prioritize harder difficulties
-      const difficultyOrder = { 'hard': 3, 'medium': 2, 'easy': 1 };
+      const difficultyOrder = { 'hard': 3, 'medium': 2, 'easy': 1 }
       return difficultyOrder[b.difficulty as keyof typeof difficultyOrder] - 
-             difficultyOrder[a.difficulty as keyof typeof difficultyOrder];
-    });
+             difficultyOrder[a.difficulty as keyof typeof difficultyOrder]
+    })
     
     // Keep only top 10 scores
-    scores = scores.slice(0, 10);
+    scores = scores.slice(0, 10)
     
     // Save back to localStorage
-    localStorage.setItem('musicalEarHighScores', JSON.stringify(scores));
+    localStorage.setItem('musicalEarHighScores', JSON.stringify(scores))
     
     // Update state
-    setHighScores(scores);
-  }, [playerName, score, totalQuestions, percentage, difficulty, scoreSaved, sessionId]);
+    setHighScores(scores)
+  }, [username, score, totalQuestions, percentage, difficulty, scoreSaved, sessionId])
 
   // Function to get appropriate message based on score percentage
   const getFeedbackMessage = () => {
-    if (percentage === 100) return '¡Perfecto! Tienes un oído musical extraordinario.';
-    if (percentage >= 90) return '¡Excelente! Tienes un oído musical extraordinario.';
-    if (percentage >= 70) return '¡Muy bien! Tienes buen oído musical.';
-    if (percentage >= 50) return 'Buen trabajo. Con más práctica mejorarás.';
-    return 'Sigue practicando. El oído musical se desarrolla con tiempo.';
-  };
+    if (percentage === 100) return '¡Perfecto! Tienes un oído musical extraordinario.'
+    if (percentage >= 90) return '¡Excelente! Tienes un oído musical extraordinario.'
+    if (percentage >= 70) return '¡Muy bien! Tienes buen oído musical.'
+    if (percentage >= 50) return 'Buen trabajo. Con más práctica mejorarás.'
+    return 'Sigue practicando. El oído musical se desarrolla con tiempo.'
+  }
 
   const getDifficultyLabel = (diff: string) => {
     switch (diff) {
-      case 'easy': return 'Fácil';
-      case 'medium': return 'Media';
-      case 'hard': return 'Difícil';
-      default: return diff;
+      case 'easy': return 'Fácil'
+      case 'medium': return 'Media'
+      case 'hard': return 'Difícil'
+      default: return diff
     }
-  };
+  }
 
   const getDifficultyColor = (diff: string) => {
     switch (diff) {
-      case 'easy': return 'text-green-600 bg-green-100';
-      case 'medium': return 'text-yellow-600 bg-yellow-100';
-      case 'hard': return 'text-red-600 bg-red-100';
-      default: return 'text-gray-600 bg-gray-100';
+      case 'easy': return 'text-green-600 bg-green-100'
+      case 'medium': return 'text-yellow-600 bg-yellow-100'
+      case 'hard': return 'text-red-600 bg-red-100'
+      default: return 'text-gray-600 bg-gray-100'
     }
-  };
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 animate-fadeIn bg-gradient-to-br from-blue-200 via-purple-200 to-pink-200 relative overflow-hidden">
@@ -127,11 +130,11 @@ const ScoreScreen: React.FC<ScoreScreenProps> = ({
       />
 
       <div className="w-full max-w-4xl bg-gradient-to-br from-white via-yellow-50 to-pink-50 rounded-3xl shadow-2xl p-6 md:p-8 border-4 border-rainbow relative">
-        <style jsx>{`
+        {/* <style jsx>{`
           .border-rainbow {
-            border-image: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #ffeaa7, #dda0dd) 1;
+            border-image: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #ffeaa7, #dda0dd) 1
           }
-        `}</style>
+        `}</style> */}
         
         <div className="flex justify-center mb-6">
           <div className="relative">
@@ -193,7 +196,7 @@ const ScoreScreen: React.FC<ScoreScreenProps> = ({
                   <tr 
                     key={entry.sessionId || `${entry.playerName}-${entry.timestamp}-${index}`}
                     className={`border-t-2 border-purple-200 ${
-                      entry.sessionId && entry.sessionId.includes(playerName) && 
+                      entry.sessionId && entry.sessionId.includes(username) && 
                       entry.score === score && entry.difficulty === difficulty
                         ? 'bg-gradient-to-r from-yellow-100 to-orange-100 border-yellow-300' : 'hover:bg-purple-50'
                     }`}
@@ -240,7 +243,7 @@ const ScoreScreen: React.FC<ScoreScreenProps> = ({
 
       </div>
     </div>
-  );
-};
+  )
+}
 
-export default ScoreScreen;
+export default ScoreScreen

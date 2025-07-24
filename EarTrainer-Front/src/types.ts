@@ -4,6 +4,8 @@ export type Difficulty = 'easy' | 'medium' | 'hard';
 
 export type Note = 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B';
 
+export type SkillLevel = 'beginner' | 'intermediate' | 'expert';
+
 export interface ScoreEntry {
   playerName: string;
   score: number;

@@ -1,175 +1,121 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Music, Check, X, LogOut, RotateCcw, Volume2 } from 'lucide-react';
-import Piano from './Piano';
-import OwlCharacter from './OwlCharacter';
-import { Note, AudioContextRef, Difficulty } from '../types';
-import { playScale, playNote, playTriad, stopAllAudio } from '../utils/audio';
-import { useDispatch, useSelector } from 'react-redux';
-import { AppDispatch, RootState } from '../redux/store';
-import { useApi } from '../hooks/useApi';
-import { CrearSesionRequest, CrearSesionResponse, EntrenarModeloRequest, EntrenarModeloResponse, RegistrarIntentoResponse, SugerirEjercicioRequest, SugerirEjercicioResponse, TerminarSesionResponse } from '../models/apiService.model';
-import { crearSesion, entrenarModelo, registrarIntento, sugerirEjercicio, terminarSesion } from '../services/api.service';
-import { endSession, startSession } from '../redux/states/user';
-import { Intento } from '../models';
+import React, { useState, useEffect, useRef } from 'react'
+import { Check, X, LogOut, RotateCcw, Volume2 } from 'lucide-react'
+import Piano from './Piano'
+import OwlCharacter from './OwlCharacter'
+import { Note, AudioContextRef } from '../types'
+import { playScale, playNote, playTriad, stopAllAudio } from '../utils/audio'
+import { useDispatch, useSelector } from 'react-redux'
+import { AppDispatch, RootState } from '../redux/store'
+import { useApi } from '../hooks/useApi'
+import { AttemptNotes } from '../models'
+import { closeSession, CloseSessionRequest, registerAttempt, RegisterAttemptRequest, suggestExercise, SuggestRequest, trainModel, TrainModelRequest } from '../services/api.service'
+import { endSession } from '../redux/states/user'
 
 interface GameScreenProps {
-  playerName: string;
-  difficulty: string;
-  arduinoPort: any | null;
-  onEndGame: (score: number, totalQuestions: number) => void;
-  onExitGame: () => void;
+  difficulty: string
+  arduinoPort: any | null
+  onEndGame: (score: number, totalQuestions: number) => void
+  onExitGame: () => void
 }
 
-const GameScreen: React.FC<GameScreenProps> = ({ 
-  playerName, 
+const GameScreen: React.FC<GameScreenProps> = ({
   difficulty, 
   arduinoPort, 
   onEndGame, 
   onExitGame 
 }) => {
-  console.log("PUNTO INICIAL")
-  const [score, setScore] = useState(0);
-  const [status, setStatus] = useState<'initial' | 'playing' | 'guessing' | 'feedback'>('initial');
-  const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
-  const [round, setRound] = useState(1);
-  const totalRounds = difficulty === 'easy' ? 5 : 10;
+  const TOTAL_ROUNDS = difficulty === 'easy' ? 5 : 10
+
+  // Apis
+  const { data: dataExercise, fetch: fetchExercise } = useApi<AttemptNotes, SuggestRequest>(suggestExercise)
+  const { fetch: fetchRegisterAttempt } = useApi<null, RegisterAttemptRequest>(registerAttempt)
+  const { fetch: fetchCloseSession } = useApi<null, CloseSessionRequest>(closeSession)
+  const { fetch: fetchTrainModel } = useApi<null, TrainModelRequest>(trainModel)
+
+  // Redux state
+  const userId = useSelector((state: RootState) => state.user.userId)
+  const username = useSelector((state: RootState) => state.user.username)
+  const sessionId = useSelector((state: RootState) => state.user.sessionId)
+  const userDispatch = useDispatch<AppDispatch>()
+
+  // Manage time
+  const startTimeRef = useRef<number | null>(null)
+
+  const [score, setScore] = useState(0)
+  const [status, setStatus] = useState<'initial' | 'playing' | 'guessing' | 'feedback'>('initial')
+  const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null)
+  const [round, setRound] = useState(1)
   const [message, setMessage] = useState('')
-  const [showExitConfirm, setShowExitConfirm] = useState(false);
-  const [owlMood, setOwlMood] = useState<'happy' | 'excited' | 'thinking' | 'celebrating' | 'encouraging'>('happy');
-  const [owlMessage, setOwlMessage] = useState('');
+  const [showExitConfirm, setShowExitConfirm] = useState(false)
+  const [owlMood, setOwlMood] = useState<'happy' | 'excited' | 'thinking' | 'celebrating' | 'encouraging'>('happy')
+  const [owlMessage, setOwlMessage] = useState('')
   const audioContextRef = useRef<AudioContextRef>({ 
     audioContext: null, 
     oscillator: null,
     gainNode: null 
-  });
+  })
   
   // Store cleanup functions for audio sequences
-  const audioCleanupRef = useRef<(() => void) | null>(null);
-
-  const sessionApi = useApi<CrearSesionResponse, CrearSesionRequest>(crearSesion)
-  const terminarSesionApi = useApi<TerminarSesionResponse, number>(terminarSesion)
-  const sugerirEjercicioApi = useApi<SugerirEjercicioResponse, SugerirEjercicioRequest>(sugerirEjercicio)
-  const registrarIntentoApi = useApi<RegistrarIntentoResponse, Intento>(registrarIntento)
-  const entrenarModeloApi = useApi<EntrenarModeloResponse, EntrenarModeloRequest>(entrenarModelo)
-
-  const idUser = useSelector((state: RootState) => state.user.idUser)
-  const userDispatch = useDispatch<AppDispatch>()
-
-  const sessionIdRef = useRef<number | null>(null);
-  const userIdRef = useRef<number>(idUser);
-  const startTimeRef = useRef<number | null>(null);
-  
-  const sessionInitialized = useRef(false);
-
-  console.log("idUser:", idUser)
-  console.log("sessionApi.data:", sessionApi.data)
-  console.log("PUNTO INICIAL 2")
+  const audioCleanupRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
-    console.log("useEffect 1:", idUser)
-    if (!sessionInitialized.current && idUser != 0) {
-      sessionInitialized.current = true;
-
-      sessionApi.fetch({userId: idUser, dificultad: difficulty as Difficulty})
-      userDispatch(startSession())
-    }
-  }, [idUser])
+    fetchExercise({user_id: userId, num_distractores: getNumDistractores(difficulty)})
+  }, [userId])
 
   useEffect(() => {
-    console.log("useEffect 2:", sessionApi.data)
-    if (sessionApi.data?.session_id) {
-      sessionIdRef.current = sessionApi.data.session_id;
-    }
-  }, [sessionApi.data]);
-
-  useEffect(() => {
-    console.log("useEffect 3:")
-    console.log("\t\tsession", sessionIdRef.current)
-    console.log("\t\tisUser", idUser)
-    return () => {
-      console.log("Return useEffect 3: ")
-      console.log("\t\tsession", sessionIdRef.current)
-      console.log("\t\tisUser", idUser)
-      const sessionId = sessionIdRef.current
-      const userId = userIdRef.current;
-      if (sessionId) {
-        terminarSesionApi.fetch(sessionId);
-        entrenarModeloApi.fetch({userId: userId, sessionId: sessionId})
-      }
-      userDispatch(endSession());
-    };
-  }, [])
-
-  useEffect(() => {
-    if (idUser != 0) {
-      // Set available notes based on difficulty
-      const numDistractores = getNumDistractores(difficulty)
-      sugerirEjercicioApi.fetch({userId: idUser, numDistractores})
-    }
-  }, [idUser])
-
-  useEffect(() => {
-    if (sugerirEjercicioApi.data) {
+    if (dataExercise) {
       const timer = setTimeout(() => {
-        initializeGame();
-      }, 2000);
+        initializeGame()
+      }, 2000)
       return () => {
-        clearTimeout(timer);
-
+        clearTimeout(timer)
 
         // Clean up audio when component unmounts
-        stopAllAudio();
+        stopAllAudio()
         if (audioCleanupRef.current) {
-          audioCleanupRef.current();
+          audioCleanupRef.current()
         }
       }
     }
-  }, [sugerirEjercicioApi.data]);
+  }, [dataExercise])
 
     // Handle Arduino input with audio feedback
   useEffect(() => {
-    const availableNotes = sugerirEjercicioApi.data?.distractores.concat(sugerirEjercicioApi.data?.objetivo || []) || [];
     const handleArduinoData = (event: any) => {
-      const { pin } = event.detail;
-      const note = pinToNote[pin];
+      const { pin } = event.detail
+      const note = pinToNote[pin]
       
       if (note) {
         // Always play the note sound when Arduino button is pressed
-        playNote(audioContextRef.current, note, 0.3);
+        playNote(audioContextRef.current, note, 0.3)
         
         // Only process as guess if we're in guessing state and note is available
-        if (status === 'guessing' && availableNotes.includes(note)) {
-          handleNoteGuess(note);
+        if (status === 'guessing' && dataExercise?.shownNotes.includes(note)) {
+          handleNoteGuess(note)
         }
       }
-    };
+    }
 
     if (arduinoPort) {
-      window.addEventListener('arduinoData', handleArduinoData);
+      window.addEventListener('arduinoData', handleArduinoData)
     }
 
     return () => {
-      window.removeEventListener('arduinoData', handleArduinoData);
-    };
-  }, [status, sugerirEjercicioApi.data, score, round, arduinoPort, sugerirEjercicioApi.data]);
+      window.removeEventListener('arduinoData', handleArduinoData)
+    }
+  }, [status, score, round, arduinoPort, dataExercise])
 
   useEffect(() => {
     // Start the first round after a delay
-    setOwlMood('excited');
-    setOwlMessage(`🎮 ¡Empezamos el juego! Nivel: ${getDifficultyDescription()}. ¡Tú puedes hacerlo!`);
+    setOwlMood('excited')
+    setOwlMessage(`🎮 ¡Empezamos el juego! Nivel: ${getDifficultyDescription()}. ¡Tú puedes hacerlo!`)
     return () => {
-      stopAllAudio();
+      stopAllAudio()
       if (audioCleanupRef.current) {
-        audioCleanupRef.current();
+        audioCleanupRef.current()
       }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (status === 'feedback' && round >= totalRounds) {
-      endGame();
     }
-  }, [score, round, status]);
+  }, [])
 
   const noteNames: { [key in Note]: string } = {
     'C': 'Do',
@@ -179,7 +125,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     'G': 'Sol',
     'A': 'La',
     'B': 'Si'
-  };
+  }
 
   // Arduino pin to note mapping
   const pinToNote: { [key: number]: Note } = {
@@ -190,7 +136,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     6: 'G',  // Sol
     7: 'A',  // La
     8: 'B'   // Si
-  };
+  }
 
   // Get available notes based on difficulty
   const getNumDistractores = (difficulty: string): number => {
@@ -204,168 +150,180 @@ const GameScreen: React.FC<GameScreenProps> = ({
       default:
         return 2; // Default to easy
     }
-  };
+  }
 
   const initializeAudioContext = () => {
     if (!audioContextRef.current.audioContext) {
-      audioContextRef.current.audioContext = new AudioContext();
-      audioContextRef.current.gainNode = audioContextRef.current.audioContext.createGain();
-      audioContextRef.current.gainNode.gain.value = 0.5;
-      audioContextRef.current.gainNode.connect(audioContextRef.current.audioContext.destination);
+      audioContextRef.current.audioContext = new AudioContext()
+      audioContextRef.current.gainNode = audioContextRef.current.audioContext.createGain()
+      audioContextRef.current.gainNode.gain.value = 0.5
+      audioContextRef.current.gainNode.connect(audioContextRef.current.audioContext.destination)
     }
-  };
+  }
 
   const initializeGame = () => {
     // Initialize Audio Context
-    initializeAudioContext();
+    initializeAudioContext()
     
-    setStatus('playing');
+    setStatus('playing')
     
     if (difficulty === 'easy') {
-      setMessage('Escuchando la tríada de Do Mayor (Do-Mi-Sol)...');
-      setOwlMessage(`¡Empezamos el juego! Nivel: ${getDifficultyDescription()}. ¡Tú puedes hacerlo!`);
+      setMessage('Escuchando la tríada de Do Mayor (Do-Mi-Sol)...')
+      setOwlMessage(`¡Empezamos el juego! Nivel: ${getDifficultyDescription()}. ¡Tú puedes hacerlo!`)
       audioCleanupRef.current = playTriad(audioContextRef.current, () => {
-        selectRandomNote();
-      });
+        selectRandomNote()
+      })
     } else {
-      setMessage('Escuchando la escala de Do Mayor...');
+      setMessage('Escuchando la escala de Do Mayor...')
       // Play full scale
       audioCleanupRef.current = playScale(audioContextRef.current, () => {
-        selectRandomNote();
-      });
+        selectRandomNote()
+      })
     }
-  };
+  }
 
   const selectRandomNote = () => {
-    setOwlMood('thinking');
-    setOwlMessage('Mmm... ¿qué nota será esta vez? ¡Escucha con atención!');
-    
-    const note = sugerirEjercicioApi.data?.objetivo || "A";
+    if (!dataExercise) return
 
-    setStatus('guessing');
-    setMessage(`¿Qué nota acabo de tocar? ¡Tú puedes!`);
+    setOwlMood('thinking')
+    setOwlMessage('Mmm... ¿qué nota será esta vez? ¡Escucha con atención!')
     
-    setOwlMood('encouraging');
-    setOwlMessage('¡Escucha bien! Ahora haz clic en la tecla que crees que es la correcta.');
+    setStatus('guessing')
+    setMessage(`¿Qué nota acabo de tocar? ¡Tú puedes!`)
+    
+    setOwlMood('encouraging')
+    setOwlMessage('¡Escucha bien! Ahora haz clic en la tecla que crees que es la correcta.')
 
     // Play the random note
     startTimeRef.current = performance.now(); // para medir el tiempo
-    playNote(audioContextRef.current, note, 1);
-  };
+    playNote(audioContextRef.current, dataExercise.correctNote, 1)
+  }
 
   const handleNoteGuess = (guessedNote: Note) => {
-    if (status !== 'guessing') return;
-    
-    const endTime = performance.now();
-    const responseTime = startTimeRef.current ? (endTime - startTimeRef.current) / 1000 : 0; // en segundos
+    if (!dataExercise) return
+    if (status !== 'guessing') return
 
-    if (guessedNote === sugerirEjercicioApi.data?.objetivo) {
-      setFeedback('correct');
-      setOwlMood('celebrating');
-      setScore(prevScore => prevScore + 1);
-      setMessage(`¡Excelente! Era ${noteNames[sugerirEjercicioApi.data?.objetivo!]}`);
-      setOwlMessage(`¡Fantástico! Reconociste la nota ${noteNames[sugerirEjercicioApi.data?.objetivo!]}. ¡Sigue así, pequeño músico!`);
-    } else {
-      setFeedback('incorrect');
-      setOwlMood('encouraging');
-      setMessage(`¡Casi! Era ${noteNames[sugerirEjercicioApi.data?.objetivo!]}, tú elegiste ${noteNames[guessedNote]}`);
-      setOwlMessage(`No te preocupes, los errores nos ayudan a aprender. ¡La próxima vez lo harás mejor!`);
+    if (round >= TOTAL_ROUNDS) {
+      fetchCloseSession({ session_id: sessionId })
+      fetchTrainModel({ session_id: sessionId, user_id: userId })
+      userDispatch(endSession())
+      endGame()
     }
 
-    registrarIntentoApi.fetch({
-      sessionId: sessionIdRef.current!,
-      notaCorrecta: sugerirEjercicioApi.data?.objetivo!, 
-      notasMostradas: sugerirEjercicioApi.data?.distractores.concat(sugerirEjercicioApi.data?.objetivo || []) || [],
-      notaElegida: guessedNote, 
-      tiempoRespuesta: responseTime,
-      esCorrecto: guessedNote === sugerirEjercicioApi.data?.objetivo, 
+    const endTime = performance.now()
+    const responseTime = startTimeRef.current ? (endTime - startTimeRef.current) / 1000 : 0; // en segundos
+
+    fetchRegisterAttempt({
+      session_id: sessionId,
+      nota_correcta: dataExercise.correctNote,
+      notas_mostradas: dataExercise.shownNotes,
+      nota_elegida: guessedNote,
+      tiempo_respuesta: responseTime,
+      es_correcto: guessedNote === dataExercise.correctNote
     })
 
     // Set available notes based on difficulty
     const numDistractores = getNumDistractores(difficulty)
-    sugerirEjercicioApi.fetch({userId: idUser, numDistractores})
+    fetchExercise({ user_id: userId, num_distractores: numDistractores })
 
-    setStatus('feedback');
+    if (guessedNote === dataExercise.correctNote) {
+      setFeedback('correct')
+      setOwlMood('celebrating')
+      setScore(prevScore => prevScore + 1)
+      setMessage(`¡Excelente! Era ${noteNames[dataExercise.correctNote]}`)
+      setOwlMessage(`¡Fantástico! Reconociste la nota ${noteNames[dataExercise.correctNote]}. ¡Sigue así, pequeño músico!`)
+    } else {
+      setFeedback('incorrect')
+      setOwlMood('encouraging')
+      setMessage(`¡Casi! Era ${noteNames[dataExercise.correctNote]}, tú elegiste ${noteNames[guessedNote]}`)
+      setOwlMessage(`No te preocupes, los errores nos ayudan a aprender. ¡La próxima vez lo harás mejor!`)
+    }
+
+    setStatus('feedback')
     
     // After feedback, go to next round or end game
     setTimeout(() => {
-      if (round >= totalRounds) {
-      } else {
-        setRound(round + 1);
-        setFeedback(null);
-        setOwlMood('excited');
-        setStatus('initial');
-        setMessage('¡Prepárate para la siguiente nota!');
-        setOwlMessage('¡Vamos por la siguiente! Cada vez lo haces mejor.');
-      }
-    }, 2500);
-  };
+      setRound(round + 1)
+      setFeedback(null)
+      setOwlMood('excited')
+      setStatus('initial')
+      setMessage('¡Prepárate para la siguiente nota!')
+      setOwlMessage('¡Vamos por la siguiente! Cada vez lo haces mejor.')
+    }, 2500)
+  }
 
   const replayCurrentNote = () => {
-    if (sugerirEjercicioApi.data?.objetivo && status === 'guessing') {
-      setOwlMood('happy');
-      setOwlMessage('¡Buena idea! Escucha otra vez la nota.');
-      playNote(audioContextRef.current, sugerirEjercicioApi.data?.objetivo, 1);
+    if (!dataExercise) return
+
+    if (dataExercise.correctNote && status === 'guessing') {
+      setOwlMood('happy')
+      setOwlMessage('¡Buena idea! Escucha otra vez la nota.')
+      playNote(audioContextRef.current, dataExercise.correctNote, 1)
     }
-  };
+  }
 
   const replayScale = () => {
     if (status === 'guessing') {
-      setOwlMood('thinking');
-      setMessage('Reproduciendo de nuevo...');
-      setOwlMessage('Te voy a tocar la escala otra vez para que recuerdes los sonidos.');
+      setOwlMood('thinking')
+      setMessage('Reproduciendo de nuevo...')
+      setOwlMessage('Te voy a tocar la escala otra vez para que recuerdes los sonidos.')
       if (difficulty === 'easy') {
         audioCleanupRef.current = playTriad(audioContextRef.current, () => {
-          setMessage('¿Qué nota acabo de tocar?');
-        });
+          setMessage('¿Qué nota acabo de tocar?')
+        })
       } else {
         audioCleanupRef.current = playScale(audioContextRef.current, () => {
-          setMessage('¿Qué nota acabo de tocar?');
-          setOwlMood('encouraging');
-          setOwlMessage('¡Ahora escucha bien la nota que voy a tocar!');
-        });
+          setMessage('¿Qué nota acabo de tocar?')
+          setOwlMood('encouraging')
+          setOwlMessage('¡Ahora escucha bien la nota que voy a tocar!')
+        })
       }
     }
-  };
+  }
 
   const endGame = () => {
     // Stop any playing audio when game ends
-    stopAllAudio();
+    stopAllAudio()
     if (audioCleanupRef.current) {
-      audioCleanupRef.current();
+      audioCleanupRef.current()
     }
-    onEndGame(score, totalRounds);
-  };
+    onEndGame(score, TOTAL_ROUNDS)
+  }
 
   const handleExitClick = () => {
-    setShowExitConfirm(true);
-  };
+    setShowExitConfirm(true)
+  }
 
   const confirmExit = () => {
+    // Close the current session
+    fetchCloseSession({ session_id: sessionId })
+    fetchTrainModel({ session_id: sessionId, user_id: userId })
+    userDispatch(endSession())
+
     // Stop all audio immediately when confirming exit
-    stopAllAudio();
+    stopAllAudio()
     if (audioCleanupRef.current) {
-      audioCleanupRef.current();
+      audioCleanupRef.current()
     }
-    onExitGame();
-  };
+    onExitGame()
+  }
 
   const cancelExit = () => {
-    setShowExitConfirm(false);
-  };
+    setShowExitConfirm(false)
+  }
 
   const getDifficultyDescription = () => {
     switch (difficulty) {
       case 'easy':
-        return 'Tríada (Do-Mi-Sol)';
+        return 'Tríada (Do-Mi-Sol)'
       case 'medium':
-        return 'Escala parcial (Do-Mi-Fa-Sol)';
+        return 'Escala parcial (Do-Mi-Fa-Sol)'
       case 'hard':
-        return 'Escala completa (Do-Re-Mi-Fa-Sol-La-Si)';
+        return 'Escala completa (Do-Re-Mi-Fa-Sol-La-Si)'
       default:
-        return 'Fácil';
+        return 'Fácil'
     }
-  };
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center p-4 animate-fadeIn bg-gradient-to-br from-blue-200 via-purple-200 to-pink-200 relative overflow-hidden">
@@ -380,16 +338,16 @@ const GameScreen: React.FC<GameScreenProps> = ({
       />
 
       <div className="w-full max-w-5xl bg-gradient-to-br from-white via-yellow-50 to-pink-50 rounded-3xl shadow-2xl p-6 md:p-8 border-4 border-rainbow relative">
-        <style jsx>{`
+        {/* <style jsx>{`
           .border-rainbow {
-            border-image: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #ffeaa7, #dda0dd) 1;
+            border-image: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #ffeaa7, #dda0dd) 1
           }
-        `}</style>
+        `}</style> */}
         
         <div className="flex justify-between items-center mb-8">
           <div>
             <h2 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-              {playerName}
+              {username}
             </h2>
             <p className="text-purple-700 font-semibold text-lg">{getDifficultyDescription()}</p>
             {arduinoPort && (
@@ -400,7 +358,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
           </div>
           <div className="flex items-center space-x-4">
             <div className="text-right bg-gradient-to-br from-purple-100 to-pink-100 p-4 rounded-2xl border-2 border-purple-300">
-              <p className="text-xl font-bold text-purple-700">Ronda: {round}/{totalRounds}</p>
+              <p className="text-xl font-bold text-purple-700">Ronda: {round}/{TOTAL_ROUNDS}</p>
               <p className="text-xl font-bold text-green-600">Puntos: {score}</p>
             </div>
             <button
@@ -454,14 +412,13 @@ const GameScreen: React.FC<GameScreenProps> = ({
         </div>
         
         {/* Piano Interface */}
-        <p>Sesion: {sessionApi.data?.session_id || 'nada'}</p>
-        <p>Error: {sessionApi.error?.message || 'nada'}</p>
-        <p>Nota: {sugerirEjercicioApi.data?.objetivo || 'nada'}</p>
-        <p>Dis: {sugerirEjercicioApi.data?.distractores || 'nada'}</p>
+        {/* <p>Sesion: {sessionId || 'nada'}</p>
+        <p>Nota: {dataExercise?.correctNote || 'nada'}</p>
+        <p>Dis: {dataExercise?.shownNotes || 'nada'}</p> */}
 
         <div className="mb-6">
           <Piano
-            availableNotes={sugerirEjercicioApi.data?.distractores.concat(sugerirEjercicioApi.data?.objetivo || []) || []}
+            availableNotes={dataExercise?.shownNotes || []}
             onNoteClick={handleNoteGuess}
             audioContextRef={audioContextRef}
             disabled={status !== 'guessing'}
@@ -474,7 +431,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
           <div className="text-center text-lg text-purple-700 bg-gradient-to-br from-yellow-100 to-orange-100 p-6 rounded-2xl border-2 border-yellow-300">
             <p className="font-bold mb-3 text-xl">¿Cómo jugar?</p>
             <p className="font-semibold">Haz clic en las teclas del piano para elegir la nota que escuchaste</p>
-            {sugerirEjercicioApi.data && sugerirEjercicioApi.data.distractores.length < 6 && (
+            {dataExercise && dataExercise.shownNotes.length < 6 && (
               <p className="text-green-600 mt-3 font-bold">
                 Solo las teclas con punto verde están disponibles
               </p>
@@ -540,7 +497,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-export default GameScreen;
+export default GameScreen

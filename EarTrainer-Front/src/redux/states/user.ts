@@ -1,16 +1,18 @@
 import { createSlice } from "@reduxjs/toolkit";
 
 interface UserState {
-    idUser: number
+    userId: number
     username: string
     isLoggedIn: boolean
+    sessionId: number
     isPlaying: boolean
 }
 
 export const UserEmptyState: UserState = {
-    idUser: 0,
+    userId: 0,
     username: '',
     isLoggedIn: false,
+    sessionId: 0,
     isPlaying: false
 }
 
@@ -24,11 +26,11 @@ export const userSlice = createSlice({
         logout: () => {
             return UserEmptyState
         },
-        startSession: (state) => {
-            return {... state, ... {isPlaying: true}}
+        startSession: (state, action) => {
+            return {... state, ... action.payload, ... {isPlaying: true}}
         },
         endSession: (state) => {
-            return {... state, ... {isPlaying: false}}
+            return {... state, ... {idSession: UserEmptyState.sessionId, isPlaying: UserEmptyState.isPlaying}}
         }
     }
 })

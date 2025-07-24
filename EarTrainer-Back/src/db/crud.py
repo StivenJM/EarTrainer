@@ -68,6 +68,16 @@ async def get_attempts_by_session(session_id: int):
     query = "SELECT * FROM note_training_logs WHERE session_id = :session_id"
     return await database.fetch_all(query=query, values={"session_id": session_id})
 
+async def get_last_n_note_attempts(user_id: int, n: int):
+    query = f"""
+    SELECT ntl.*
+    FROM note_training_logs ntl
+    JOIN training_sessions ts ON ntl.session_id = ts.id
+    WHERE ts.user_id = :user_id
+    ORDER BY ntl.created_at DESC
+    LIMIT {n}
+    """
+    return await database.fetch_all(query=query, values={"user_id": user_id})
 
 
 # ----------------------------------------------------------------------
@@ -107,4 +117,36 @@ async def get_or_create_user(username: str) -> dict:
     user = await database.fetch_one(query=query_create, values={"username": username})
     return dict(user)
 
+# ----------------------------------------------------------------------
+# ----------------------------------------------------------------------
 
+# Obtener caracteristicas de habilidad del usuario desde la vista
+async def get_user_skill_features(user_id: int) -> dict | None:
+    """
+    Obtiene las características de habilidad de un usuario desde la vista
+    'user_skill_features_view'.
+
+    Args:
+        user_id (int): El ID del usuario.
+
+    Returns:
+        dict | None: Un diccionario con las características de habilidad del usuario,
+                     o None si el usuario no tiene datos en la vista.
+    """
+    query = """
+    SELECT
+        accuracy_easy,
+        accuracy_medium,
+        accuracy_hard,
+        avg_response_time,
+        games_played,
+        avg_session_duration
+    FROM
+        user_skill_features_view
+    WHERE
+        user_id = :user_id
+    """
+    values = {"user_id": user_id}
+    # fetch_one devuelve un Record, que se puede convertir a dict
+    result = await database.fetch_one(query=query, values=values)
+    return dict(result) if result else None

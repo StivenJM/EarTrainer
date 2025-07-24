@@ -1,0 +1,17 @@
+{
+  "__metadata__": {
+    "description": "Parámetros de normalización z-score (media y desviación estándar) para algunas características de entrada del modelo de predicción de habilidad. Estos valores son necesarios para preprocesar los nuevos datos antes de pasarlos al modelo SVM."
+  },
+  "avg_response_time": {
+    "mean": 2.081,
+    "std": 1.116
+  },
+  "games_played": {
+    "mean": 49.649,
+    "std": 54.529
+  },
+  "avg_session_duration": {
+    "mean": 18.123,
+    "std": 7.279
+  }
+}

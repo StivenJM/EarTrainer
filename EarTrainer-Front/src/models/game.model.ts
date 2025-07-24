@@ -3,11 +3,25 @@ import { Note } from "../types";
 /**
  * Represents a player's attempt in a game round.
  */
-export interface Intento {
-    sessionId: number;
-    notaCorrecta: Note;
-    notasMostradas: Note[];
-    notaElegida: Note;
-    tiempoRespuesta: number;
-    esCorrecto: boolean;
+export interface Attempt {
+    sessionId: number
+    correctNote: Note
+    shownNotes: Note[]
+    selectedNote: Note
+    responseTime: number
+    isCorrect: boolean
+}
+
+export interface AttemptNotes {
+    correctNote: Note
+    shownNotes: Note[]
+}
+
+export interface Session {
+    sessionId: number
+}
+
+export interface User {
+    userId: number
+    username: string
 }

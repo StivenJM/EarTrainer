@@ -6,3 +6,9 @@ pydantic
 databases
 dotenv
 asyncpg
+
+cloudpickle
+pandas
+psutil
+pyarrow
+scipy
