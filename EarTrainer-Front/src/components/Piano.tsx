@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Note, AudioContextRef } from '../types';
-import { playNote } from '../utils/audio';
+import { playNote, ensureAudioContext } from '../utils/audio';
 
 interface PianoProps {
   availableNotes: Note[];
@@ -45,6 +45,9 @@ const Piano: React.FC<PianoProps> = ({
 
   const handleKeyPress = (note: Note) => {
     if (disabled || !availableNotes.includes(note)) return;
+
+    // Asegurarse de que el AudioContext esté inicializado antes de reproducir
+    ensureAudioContext(audioContextRef.current);
 
     // Visual feedback
     setPressedKeys(prev => new Set(prev).add(note));
