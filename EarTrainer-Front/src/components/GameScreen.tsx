@@ -153,17 +153,25 @@ const GameScreen: React.FC<GameScreenProps> = ({
   }
 
   const initializeAudioContext = () => {
-    if (!audioContextRef.current.audioContext) {
-      audioContextRef.current.audioContext = new AudioContext()
-      audioContextRef.current.gainNode = audioContextRef.current.audioContext.createGain()
-      audioContextRef.current.gainNode.gain.value = 0.5
-      audioContextRef.current.gainNode.connect(audioContextRef.current.audioContext.destination)
-    }
+    // Importamos la función ensureAudioContext para inicializar correctamente el AudioContext
+    import('../utils/audio').then(({ ensureAudioContext }) => {
+      ensureAudioContext(audioContextRef.current);
+    });
   }
 
   const initializeGame = () => {
-    // Initialize Audio Context
+    // Initialize Audio Context en respuesta a una interacción del usuario
     initializeAudioContext()
+    
+    // Añadir un evento de toque para dispositivos móviles para inicializar el audio
+    const handleUserInteraction = () => {
+      initializeAudioContext();
+      document.removeEventListener('touchstart', handleUserInteraction);
+      document.removeEventListener('click', handleUserInteraction);
+    };
+    
+    document.addEventListener('touchstart', handleUserInteraction, { once: true });
+    document.addEventListener('click', handleUserInteraction, { once: true });
     
     setStatus('playing')
     
@@ -274,6 +282,9 @@ const GameScreen: React.FC<GameScreenProps> = ({
     if (!dataExercise) return
 
     if (dataExercise.correctNote && status === 'guessing') {
+      // Asegurarse de que el AudioContext esté inicializado antes de reproducir
+      initializeAudioContext()
+      
       setOwlMood('happy')
       setOwlMessage('¡Buena idea! Escucha otra vez la nota.')
       playNote(audioContextRef.current, dataExercise.correctNote, 1)
@@ -282,6 +293,9 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   const replayScale = () => {
     if (status === 'guessing') {
+      // Asegurarse de que el AudioContext esté inicializado antes de reproducir
+      initializeAudioContext()
+      
       setOwlMood('thinking')
       setMessage('Reproduciendo de nuevo...')
       setOwlMessage('Te voy a tocar la escala otra vez para que recuerdes los sonidos.')
@@ -349,11 +363,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
       {/* Decoraciones de fondo animadas */}
 
 
-      {/* Búho guía */}
+      {/* Búho guía (ahora como botón flotante) */}
       <OwlCharacter
         mood={owlMood}
         message={owlMessage}
-        isVisible={true}
       />
 
       <div className="w-full max-w-5xl bg-gradient-to-br from-white via-yellow-50 to-pink-50 rounded-3xl shadow-2xl p-6 md:p-8 border-4 border-rainbow relative">

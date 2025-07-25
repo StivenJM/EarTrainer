@@ -3,18 +3,19 @@ import React, { useState, useEffect } from 'react';
 interface OwlCharacterProps {
   mood: 'happy' | 'excited' | 'thinking' | 'celebrating' | 'encouraging';
   message: string;
-  isVisible: boolean;
+  isVisible?: boolean;
   onAnimationComplete?: () => void;
 }
 
-const OwlCharacter: React.FC<OwlCharacterProps> = ({ 
-  mood, 
-  message, 
-  isVisible, 
-  onAnimationComplete 
+const OwlCharacter: React.FC<OwlCharacterProps> = ({
+  mood,
+  message,
+  isVisible: initialVisibility = true,
+  onAnimationComplete
 }) => {
   const [isBlinking, setIsBlinking] = useState(false);
   const [isFlapping, setIsFlapping] = useState(false);
+  const [showFullCharacter, setShowFullCharacter] = useState(initialVisibility);
 
   useEffect(() => {
     // Parpadeo aleatorio
@@ -60,12 +61,26 @@ const OwlCharacter: React.FC<OwlCharacterProps> = ({
     }
   };
 
-  if (!isVisible) return null;
+  const toggleCharacter = () => {
+    setShowFullCharacter(prev => !prev);
+  };
 
   return (
-    <div className={`fixed top-4 right-4 z-50 transition-all duration-500 ${
-      isVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
-    }`}>
+    <div className="fixed top-4 right-4 z-50">
+      {/* Botón flotante (visible cuando el personaje está oculto) */}
+      {!showFullCharacter && (
+        <button
+          onClick={toggleCharacter}
+          className="w-14 h-14 rounded-full bg-gradient-to-r from-orange-400 to-orange-600 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-110 flex items-center justify-center border-2 border-yellow-300"
+          aria-label="Mostrar Hooty"
+        >
+          <div className="text-2xl">🦉</div>
+        </button>
+      )}
+
+      {/* Personaje completo (visible cuando showFullCharacter es true) */}
+      {showFullCharacter && (
+        <div className="transition-all duration-500 translate-x-0 opacity-100">
       {/* Globo de diálogo */}
       <div className="relative mb-4 mr-8">
         <div className="bg-white rounded-2xl p-4 shadow-lg border-4 border-yellow-300 max-w-xs">
@@ -134,7 +149,18 @@ const OwlCharacter: React.FC<OwlCharacterProps> = ({
 
         {/* Sombra */}
         
+        </div>
+        
+        {/* Botón para cerrar/minimizar */}
+        <button
+          onClick={toggleCharacter}
+          className="absolute top-2 right-2 w-8 h-8 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-all duration-300 shadow-md"
+          aria-label="Ocultar Hooty"
+        >
+          <span>×</span>
+        </button>
       </div>
+      )}
     </div>
   );
 };

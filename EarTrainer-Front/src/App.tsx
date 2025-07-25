@@ -4,6 +4,7 @@ import GameScreen from './components/GameScreen';
 import ScoreScreen from './components/ScoreScreen';
 import HighScoresScreen from './components/HighScoresScreen';
 import Footer from './components/Footer';
+import OrientationDetector from './components/OrientationDetector';
 import { GameState } from './types';
 
 function App() {
@@ -40,8 +41,9 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-100 to-purple-100 text-gray-800 font-sans flex flex-col">
-      <div className="flex-1">
+    <OrientationDetector>
+      <div className="min-h-screen bg-gradient-to-b from-blue-100 to-purple-100 text-gray-800 font-sans flex flex-col">
+        <div className="flex-1">
         {gameState === 'welcome' && (
           <WelcomeScreen onStartGame={startGame} onShowHighScores={showHighScores} />
         )}
@@ -64,9 +66,10 @@ function App() {
         {gameState === 'highScores' && (
           <HighScoresScreen onBack={returnToWelcome} />
         )}
+        </div>
+        <Footer />
       </div>
-      <Footer />
-    </div>
+    </OrientationDetector>
   );
 };
 

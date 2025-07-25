@@ -12,6 +12,38 @@ const pianoSamples: { [key in Note]: string } = {
   'B': 'https://www.soundjay.com/misc/sounds/bell-ringing-05.wav'
 };
 
+// Función para asegurar que el AudioContext esté inicializado correctamente
+export const ensureAudioContext = (audioContextRef: AudioContextRef): boolean => {
+  try {
+    // Si no existe el audioContext, crearlo
+    if (!audioContextRef.audioContext) {
+      // Usar el constructor con prefijo para navegadores más antiguos
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      
+      if (!AudioContextClass) {
+        console.error('Web Audio API no soportada en este navegador');
+        return false;
+      }
+      
+      audioContextRef.audioContext = new AudioContextClass();
+      audioContextRef.gainNode = audioContextRef.audioContext.createGain();
+      audioContextRef.gainNode.gain.value = 0.5;
+      audioContextRef.gainNode.connect(audioContextRef.audioContext.destination);
+    }
+    
+    // En iOS y algunos navegadores, el audioContext puede estar en estado "suspended"
+    // y necesita ser reanudado como respuesta a una interacción del usuario
+    if (audioContextRef.audioContext.state === 'suspended') {
+      audioContextRef.audioContext.resume();
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error al inicializar AudioContext:', error);
+    return false;
+  }
+};
+
 // Better approach: Use Web Audio API to create realistic piano tones
 const noteFrequencies: { [key in Note]: number } = {
   'C': 261.63,  // Middle C
@@ -87,19 +119,20 @@ const createPianoTone = (
 
 // Play a single note with realistic piano sound
 export const playNote = (
-  audioContextRef: AudioContextRef, 
-  note: Note, 
+  audioContextRef: AudioContextRef,
+  note: Note,
   duration: number = 1
 ) => {
-  if (!audioContextRef.audioContext) return;
+  // Asegurar que el AudioContext esté inicializado y activo
+  if (!ensureAudioContext(audioContextRef)) return;
   
   const frequency = noteFrequencies[note];
-  const oscillators = createPianoTone(audioContextRef.audioContext, frequency, duration);
+  const oscillators = createPianoTone(audioContextRef.audioContext!, frequency, duration);
   
   // Add all oscillators to active sources
   activeAudioSources.push(...oscillators);
   
-  const now = audioContextRef.audioContext.currentTime;
+  const now = audioContextRef.audioContext!.currentTime;
   
   // Start all oscillators
   oscillators.forEach(osc => {
@@ -121,6 +154,12 @@ export const playScale = (
   audioContextRef: AudioContextRef,
   onComplete: () => void
 ) => {
+  // Asegurar que el AudioContext esté inicializado y activo
+  if (!ensureAudioContext(audioContextRef)) {
+    onComplete();
+    return () => {};
+  }
+  
   const notes: Note[] = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
   let index = 0;
   let timeoutId: NodeJS.Timeout;
@@ -150,6 +189,12 @@ export const playTriad = (
   audioContextRef: AudioContextRef,
   onComplete: () => void
 ) => {
+  // Asegurar que el AudioContext esté inicializado y activo
+  if (!ensureAudioContext(audioContextRef)) {
+    onComplete();
+    return () => {};
+  }
+  
   const triadSequence: Note[] = ['C', 'E', 'G', 'E', 'C'];
   let index = 0;
   let timeoutId: NodeJS.Timeout;
