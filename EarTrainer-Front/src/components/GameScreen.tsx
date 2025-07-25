@@ -168,9 +168,9 @@ const GameScreen: React.FC<GameScreenProps> = ({
     setStatus('playing')
     
     if (difficulty === 'easy') {
-      setMessage('Escuchando la tríada de Do Mayor (Do-Mi-Sol)...')
+      setMessage('Escuchando la escala completa...')
       setOwlMessage(`¡Empezamos el juego! Nivel: ${getDifficultyDescription()}. ¡Tú puedes hacerlo!`)
-      audioCleanupRef.current = playTriad(audioContextRef.current, () => {
+      audioCleanupRef.current = playScale(audioContextRef.current, () => {
         selectRandomNote()
       })
     } else {
@@ -203,16 +203,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
     if (!dataExercise) return
     if (status !== 'guessing') return
 
-    if (round >= TOTAL_ROUNDS) {
-      fetchCloseSession({ session_id: sessionId })
-      fetchTrainModel({ session_id: sessionId, user_id: userId })
-      userDispatch(endSession())
-      endGame()
-    }
-
     const endTime = performance.now()
     const responseTime = startTimeRef.current ? (endTime - startTimeRef.current) / 1000 : 0; // en segundos
 
+    // Registrar el intento
     fetchRegisterAttempt({
       session_id: sessionId,
       nota_correcta: dataExercise.correctNote,
@@ -222,14 +216,13 @@ const GameScreen: React.FC<GameScreenProps> = ({
       es_correcto: guessedNote === dataExercise.correctNote
     })
 
-    // Set available notes based on difficulty
-    const numDistractores = getNumDistractores(difficulty)
-    fetchExercise({ user_id: userId, num_distractores: numDistractores })
-
+    // Actualizar la puntuación si la respuesta es correcta
+    let newScore = score
     if (guessedNote === dataExercise.correctNote) {
+      newScore = score + 1
+      setScore(newScore)
       setFeedback('correct')
       setOwlMood('celebrating')
-      setScore(prevScore => prevScore + 1)
       setMessage(`¡Excelente! Era ${noteNames[dataExercise.correctNote]}`)
       setOwlMessage(`¡Fantástico! Reconociste la nota ${noteNames[dataExercise.correctNote]}. ¡Sigue así, pequeño músico!`)
     } else {
@@ -241,14 +234,39 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
     setStatus('feedback')
     
-    // After feedback, go to next round or end game
+    // Verificar si es la última ronda
+    const isLastRound = round >= TOTAL_ROUNDS
+    
+    // Mostrar feedback por 2.5 segundos
     setTimeout(() => {
-      setRound(round + 1)
-      setFeedback(null)
-      setOwlMood('excited')
-      setStatus('initial')
-      setMessage('¡Prepárate para la siguiente nota!')
-      setOwlMessage('¡Vamos por la siguiente! Cada vez lo haces mejor.')
+      // Detener cualquier audio que esté reproduciéndose antes de cambiar de estado
+      stopAllAudio()
+      if (audioCleanupRef.current) {
+        audioCleanupRef.current()
+        audioCleanupRef.current = null
+      }
+      
+      if (isLastRound) {
+        // Si es la última ronda, terminar el juego
+        fetchCloseSession({ session_id: sessionId })
+        fetchTrainModel({ session_id: sessionId, user_id: userId })
+        userDispatch(endSession())
+        
+        // Terminar el juego con la puntuación actualizada
+        onEndGame(newScore, TOTAL_ROUNDS)
+      } else {
+        // Si no es la última ronda, preparar la siguiente ronda
+        setRound(round + 1)
+        setFeedback(null)
+        setOwlMood('excited')
+        setStatus('initial')
+        setMessage('¡Prepárate para la siguiente nota!')
+        setOwlMessage('¡Vamos por la siguiente! Cada vez lo haces mejor.')
+        
+        // Preparar el siguiente ejercicio
+        const numDistractores = getNumDistractores(difficulty)
+        fetchExercise({ user_id: userId, num_distractores: numDistractores })
+      }
     }, 2500)
   }
 
@@ -286,6 +304,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     stopAllAudio()
     if (audioCleanupRef.current) {
       audioCleanupRef.current()
+      audioCleanupRef.current = null
     }
     onEndGame(score, TOTAL_ROUNDS)
   }
@@ -315,7 +334,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const getDifficultyDescription = () => {
     switch (difficulty) {
       case 'easy':
-        return 'Tríada (Do-Mi-Sol)'
+        return 'Escala completa (Do-Re-Mi-Fa-Sol-La-Si)'
       case 'medium':
         return 'Escala parcial (Do-Mi-Fa-Sol)'
       case 'hard':

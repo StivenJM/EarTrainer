@@ -137,11 +137,9 @@ const Piano: React.FC<PianoProps> = ({
 
     if (isPressed && !isDisabled) {
       baseClasses += `
-        bg-gradient-to-b from-yellow-200 to-orange-300 
-        transform translate-y-2 scale-95
+
+
         shadow-lg
-        border-orange-400
-        animate-pulse
       `;
     } else if (!isDisabled) {
       baseClasses += "hover:bg-gradient-to-b hover:from-yellow-100 hover:to-pink-200 hover:border-purple-400 ";
@@ -191,9 +189,9 @@ const Piano: React.FC<PianoProps> = ({
               >
                 {/* Key highlight when pressed */}
                 {isPressed && isAvailable && (
-                  <div className="absolute inset-0 bg-gradient-to-b from-yellow-300 to-orange-400 opacity-70 rounded-b-2xl animate-pulse z-5">
-                    <div className="absolute inset-0 bg-white opacity-30 animate-ping rounded-b-2xl"></div>
-                  </div>
+
+                    <div className="absolute inset-0 bg-white opacity-30 rounded-b-2xl"></div>
+
                 )}
                 
                 {/* Note name - only show if showLabels is true */}
