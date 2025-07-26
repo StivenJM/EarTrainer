@@ -43,7 +43,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const startTimeRef = useRef<number | null>(null)
 
   const [score, setScore] = useState(0)
-  const [status, setStatus] = useState<'initial' | 'playing' | 'guessing' | 'feedback'>('initial')
+  const [status, setStatus] = useState<'initial' | 'playing' | 'guessing' | 'feedback' | 'waitingForNote'>('initial')
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null)
   const [audioReady, setAudioReady] = useState(false)
   const [round, setRound] = useState(1)
@@ -137,12 +137,13 @@ const GameScreen: React.FC<GameScreenProps> = ({
     }
   }
 
-  const initializeAudioContext = () => {
+  const initializeAudioContext = async () => {
     try {
-      // Crear AudioContext INMEDIATAMENTE en respuesta al clic (sin async/await)
+      // Crear AudioContext si no existe
       if (!audioContextRef.current.audioContext) {
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
         if (!AudioContextClass) {
+          console.error("Web Audio API no es compatible.");
           setAudioReady(false);
           return;
         }
@@ -152,39 +153,60 @@ const GameScreen: React.FC<GameScreenProps> = ({
         audioContextRef.current.gainNode!.connect(audioContextRef.current.audioContext.destination);
       }
       
-      // Reanudar si está suspendido (también sincrónicamente)
+      // CRÍTICO PARA IOS: Esperar a que el contexto se reanude
       if (audioContextRef.current.audioContext.state === 'suspended') {
-        audioContextRef.current.audioContext.resume();
+        await audioContextRef.current.audioContext.resume();
       }
       
-      setAudioReady(true);
-      
-      // IMPORTANTE: Inicializar el juego INMEDIATAMENTE después de activar el audio
-      if (dataExercise) {
-        initializeGame();
+      // Solo si el contexto está activo, marcamos como listo
+      if (audioContextRef.current.audioContext.state === 'running') {
+        setAudioReady(true);
+      } else {
+        console.error("El AudioContext no se pudo activar.");
+        setAudioReady(false);
       }
     } catch (error) {
-      console.error('Error initializing audio:', error);
+      console.error('Error al inicializar el audio:', error);
       setAudioReady(false);
     }
   };
 
+  // NUEVO: useEffect para iniciar el juego de forma segura
+  useEffect(() => {
+    // Iniciar el juego solo cuando el audio esté listo Y tengamos un ejercicio
+    if (audioReady && dataExercise && status === 'initial') {
+      initializeGame();
+    }
+  }, [audioReady, dataExercise, status]);
+
+
   const initializeGame = () => {
     setStatus('playing')
+    stopAllAudio();
 
     if (difficulty === 'easy') {
       setMessage('Escuchando la escala completa...')
       setOwlMessage(`¡Empezamos el juego! Nivel: ${getDifficultyDescription()}. ¡Tú puedes hacerlo!`)
       audioCleanupRef.current = playScale(audioContextRef.current, () => {
-        selectRandomNote()
+        stopAllAudio();
+        // NO LLAMES selectRandomNote aquí
+        setStatus('waitingForNote'); // Nuevo estado temporal
       })
     } else {
       setMessage('Escuchando la escala de Do Mayor...')
       audioCleanupRef.current = playScale(audioContextRef.current, () => {
-        selectRandomNote()
+        stopAllAudio();
+        setStatus('waitingForNote');
       })
     }
   }
+
+  // Nuevo useEffect para reproducir la nota cuando el ejercicio esté listo y el estado sea 'waitingForNote'
+  useEffect(() => {
+    if (status === 'waitingForNote' && dataExercise) {
+      selectRandomNote();
+    }
+  }, [status, dataExercise]);
 
   const selectRandomNote = () => {
     if (!dataExercise) return
@@ -197,6 +219,9 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
     setOwlMood('encouraging')
     setOwlMessage('¡Escucha bien! Ahora haz clic en la tecla que crees que es la correcta.')
+
+    // Detener cualquier audio anterior antes de reproducir la nueva nota
+    stopAllAudio();
 
     // Play the random note
     startTimeRef.current = performance.now(); // para medir el tiempo
