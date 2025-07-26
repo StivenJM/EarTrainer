@@ -39,28 +39,34 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStartGame, onShowHighSc
   const [showTutorial, setShowTutorial] = useState(false)
   const [showOwl, setShowOwl] = useState(true)
 
+  const [level, setLevel] = useState('')
+
   useEffect(() => {
-        if (dataPredictSkill) {
-            switch (dataPredictSkill) {
-                case 'beginner':
-                    setDifficulty('easy')
-                    setRecommendedDifficulty('easy')
-                    break
-                case 'intermediate':
-                    setDifficulty('medium')
-                    setRecommendedDifficulty('medium')
-                    break
-                case 'expert':
-                    setDifficulty('hard')
-                    setRecommendedDifficulty('hard')
-                    break
-                default:
-                    setDifficulty('easy')
-                    setRecommendedDifficulty('easy')
-                    break
-            }
-        }
-    }, [dataPredictSkill])
+    if (dataPredictSkill) {
+      switch (dataPredictSkill) {
+        case 'beginner':
+          setDifficulty('easy')
+          setRecommendedDifficulty('easy')
+          setLevel('Principiante')
+          break
+        case 'intermediate':
+          setDifficulty('medium')
+          setRecommendedDifficulty('medium')
+          setLevel('Intermedio')
+          break
+        case 'expert':
+          setDifficulty('hard')
+          setRecommendedDifficulty('hard')
+          setLevel('Experto')
+          break
+        default:
+          setDifficulty('easy')
+          setRecommendedDifficulty('easy')
+          setLevel('Principiante')
+          break
+      }
+    }
+  }, [dataPredictSkill])
 
   const handleArduinoConnection = (isConnected: boolean, port: any | null) => {
     setIsArduinoConnected(isConnected)
@@ -88,8 +94,8 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStartGame, onShowHighSc
 
   const handleSubmit = () => {
     fetchGlobalStartSession(
-      startSession, 
-      {user_id: userId, dificultad: difficulty as Difficulty}
+      startSession,
+      { user_id: userId, dificultad: difficulty as Difficulty }
     )
     onStartGame(difficulty, arduinoPort)
   }
@@ -121,7 +127,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStartGame, onShowHighSc
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25)
           }
         `}</style> */}
-        
+
         <div className="flex justify-center mb-6">
           <div className="relative">
             <div className="text-8xl animate-bounce">🎵</div>
@@ -130,16 +136,16 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStartGame, onShowHighSc
             </div>
           </div>
         </div>
-        
+
         <h1 className="text-4xl font-bold text-center bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
           EarTrainer
         </h1>
         <p className="text-center text-purple-700 mb-8 text-xl font-semibold">
           ¡Aprende las notas musicales jugando!
         </p>
-        
+
         <ArduinoConnect onConnectionChange={handleArduinoConnection} />
-        
+
         <form className="space-y-6">
 
           {loadingUser && <LucideLoadingSpinner />}
@@ -184,6 +190,16 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStartGame, onShowHighSc
               <h3 className="text-3xl font-bold text-center bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent pb-6">
                 Bienvenido {username}
               </h3>
+              
+              {/* Nuevo título y estilos para el nivel */}
+              <div className="text-center mb-6">
+                <h4 className="text-lg font-bold text-purple-700 mb-2">
+                  TU NIVEL ES:
+                </h4>
+                <div className="inline-block px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-bold text-xl rounded-full shadow-lg border-2 border-purple-300">
+                  {level}
+                </div>
+              </div>
 
               <div>
                 <label htmlFor="difficulty" className="block text-lg font-bold text-purple-700 mb-2">
@@ -212,7 +228,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStartGame, onShowHighSc
                   <option value="hard">Difícil (7 notas)</option>
                 </select>
               </div>
-              
+
               <div className="space-y-4 py-6">
                 <button
                   type="button"
@@ -231,7 +247,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStartGame, onShowHighSc
                   <Play size={24} />
                   <span>¡Empezar a jugar!</span>
                 </button>
-                
+
                 <button
                   type="button"
                   onClick={onShowHighScores}
@@ -253,7 +269,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStartGame, onShowHighSc
             </div>
           }
         </form>
-        
+
         {isArduinoConnected && (
           <div className="mt-6 text-center text-lg text-green-600 font-bold bg-green-100 p-3 rounded-xl border-2 border-green-300">
             ¡Arduino conectado! Puedes usar los botones físicos
