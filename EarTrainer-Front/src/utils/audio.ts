@@ -15,31 +15,19 @@ const pianoSamples: { [key in Note]: string } = {
 // Función para asegurar que el AudioContext esté inicializado correctamente
 export const ensureAudioContext = async (audioContextRef: AudioContextRef): Promise<boolean> => {
   try {
-    // Si no existe el audioContext, crearlo
     if (!audioContextRef.audioContext) {
-      // Usar el constructor con prefijo para navegadores más antiguos
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      
-      if (!AudioContextClass) {
-        console.error('Web Audio API no soportada en este navegador');
-        return false;
-      }
-      
+      if (!AudioContextClass) return false;
       audioContextRef.audioContext = new AudioContextClass();
       audioContextRef.gainNode = audioContextRef.audioContext.createGain();
       audioContextRef.gainNode.gain.value = 0.5;
       audioContextRef.gainNode.connect(audioContextRef.audioContext.destination);
     }
-    
-    // En iOS y algunos navegadores, el audioContext puede estar en estado "suspended"
-    // y necesita ser reanudado como respuesta a una interacción del usuario
     if (audioContextRef.audioContext.state === 'suspended') {
       await audioContextRef.audioContext.resume();
     }
-    
     return true;
-  } catch (error) {
-    console.error('Error al inicializar AudioContext:', error);
+  } catch (e) {
     return false;
   }
 };

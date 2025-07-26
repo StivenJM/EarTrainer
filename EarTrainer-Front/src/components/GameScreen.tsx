@@ -65,21 +65,19 @@ const GameScreen: React.FC<GameScreenProps> = ({
   }, [userId])
 
   useEffect(() => {
-    if (dataExercise) {
+    if (dataExercise && audioReady) {
       const timer = setTimeout(() => {
         initializeGame()
       }, 2000)
       return () => {
         clearTimeout(timer)
-
-        // Clean up audio when component unmounts
         stopAllAudio()
         if (audioCleanupRef.current) {
           audioCleanupRef.current()
         }
       }
     }
-  }, [dataExercise])
+  }, [dataExercise, audioReady])
 
   // Handle Arduino input with audio feedback
   useEffect(() => {
@@ -155,9 +153,13 @@ const GameScreen: React.FC<GameScreenProps> = ({
   }
 
   const initializeAudioContext = async () => {
-    const { ensureAudioContext } = await import('../utils/audio')
-    await ensureAudioContext(audioContextRef.current)
-    setAudioReady(true)
+    const { ensureAudioContext } = await import('../utils/audio');
+    const ready = await ensureAudioContext(audioContextRef.current);
+    if (ready) {
+      setAudioReady(true);
+    } else {
+      setAudioReady(false);
+    }
   }
 
 
@@ -364,7 +366,9 @@ const GameScreen: React.FC<GameScreenProps> = ({
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-blue-200 via-purple-200 to-pink-200">
         <button
-          onClick={initializeAudioContext}
+          onClick={async () => {
+            await initializeAudioContext();
+          }}
           className="px-8 py-5 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-3xl shadow-lg hover:from-purple-700 hover:to-pink-700 transition duration-300"
         >
           Toca aquí para activar el sonido 🎵
