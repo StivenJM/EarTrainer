@@ -43,35 +43,38 @@ const Piano: React.FC<PianoProps> = ({
     // No black key between B and C
   ];
 
-  const handleKeyPress = (note: Note) => {
-    if (disabled || !availableNotes.includes(note)) return;
+const handleKeyPress = async (note: Note) => {
+  if (disabled || !availableNotes.includes(note)) return;
 
-    // Asegurarse de que el AudioContext esté inicializado antes de reproducir
-    ensureAudioContext(audioContextRef.current);
+  // Asegurarse que AudioContext está activo (resume si está suspendido)
+  const ready = await ensureAudioContext(audioContextRef.current);
+  if (!ready) {
+    console.warn('No se pudo activar AudioContext');
+    return;
+  }
 
-    // Visual feedback
-    setPressedKeys(prev => new Set(prev).add(note));
-    
-    // Clear any existing timeout for this key
-    if (pressTimeoutRef.current[note]) {
-      clearTimeout(pressTimeoutRef.current[note]);
-    }
-    
-    // Set timeout to release key
-    pressTimeoutRef.current[note] = setTimeout(() => {
-      setPressedKeys(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(note);
-        return newSet;
-      });
-    }, 200);
+  // Visual feedback
+  setPressedKeys(prev => new Set(prev).add(note));
 
-    // Play sound
-    playNote(audioContextRef.current, note, 0.3);
-    
-    // Trigger game logic
-    onNoteClick(note);
-  };
+  if (pressTimeoutRef.current[note]) {
+    clearTimeout(pressTimeoutRef.current[note]);
+  }
+
+  pressTimeoutRef.current[note] = setTimeout(() => {
+    setPressedKeys(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(note);
+      return newSet;
+    });
+  }, 200);
+
+  // Reproducir nota solo después que audio está listo
+  playNote(audioContextRef.current, note, 0.3);
+
+  // Lógica de juego
+  onNoteClick(note);
+};
+
 
   // Handle Arduino input for visual feedback
   useEffect(() => {

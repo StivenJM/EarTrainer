@@ -11,6 +11,7 @@ import { AttemptNotes } from '../models'
 import { closeSession, CloseSessionRequest, registerAttempt, RegisterAttemptRequest, suggestExercise, SuggestRequest, trainModel, TrainModelRequest } from '../services/api.service'
 import { endSession } from '../redux/states/user'
 
+
 interface GameScreenProps {
   difficulty: string
   arduinoPort: any | null
@@ -19,10 +20,10 @@ interface GameScreenProps {
 }
 
 const GameScreen: React.FC<GameScreenProps> = ({
-  difficulty, 
-  arduinoPort, 
-  onEndGame, 
-  onExitGame 
+  difficulty,
+  arduinoPort,
+  onEndGame,
+  onExitGame
 }) => {
   const TOTAL_ROUNDS = difficulty === 'easy' ? 5 : 10
 
@@ -44,22 +45,23 @@ const GameScreen: React.FC<GameScreenProps> = ({
   const [score, setScore] = useState(0)
   const [status, setStatus] = useState<'initial' | 'playing' | 'guessing' | 'feedback'>('initial')
   const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null)
+  const [audioReady, setAudioReady] = useState(false)
   const [round, setRound] = useState(1)
   const [message, setMessage] = useState('')
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const [owlMood, setOwlMood] = useState<'happy' | 'excited' | 'thinking' | 'celebrating' | 'encouraging'>('happy')
   const [owlMessage, setOwlMessage] = useState('')
-  const audioContextRef = useRef<AudioContextRef>({ 
-    audioContext: null, 
+  const audioContextRef = useRef<AudioContextRef>({
+    audioContext: null,
     oscillator: null,
-    gainNode: null 
+    gainNode: null
   })
-  
+
   // Store cleanup functions for audio sequences
   const audioCleanupRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
-    fetchExercise({user_id: userId, num_distractores: getNumDistractores(difficulty)})
+    fetchExercise({ user_id: userId, num_distractores: getNumDistractores(difficulty) })
   }, [userId])
 
   useEffect(() => {
@@ -79,16 +81,16 @@ const GameScreen: React.FC<GameScreenProps> = ({
     }
   }, [dataExercise])
 
-    // Handle Arduino input with audio feedback
+  // Handle Arduino input with audio feedback
   useEffect(() => {
     const handleArduinoData = (event: any) => {
       const { pin } = event.detail
       const note = pinToNote[pin]
-      
+
       if (note) {
         // Always play the note sound when Arduino button is pressed
         playNote(audioContextRef.current, note, 0.3)
-        
+
         // Only process as guess if we're in guessing state and note is available
         if (status === 'guessing' && dataExercise?.shownNotes.includes(note)) {
           handleNoteGuess(note)
@@ -152,29 +154,29 @@ const GameScreen: React.FC<GameScreenProps> = ({
     }
   }
 
-  const initializeAudioContext = () => {
-    // Importamos la función ensureAudioContext para inicializar correctamente el AudioContext
-    import('../utils/audio').then(({ ensureAudioContext }) => {
-      ensureAudioContext(audioContextRef.current);
-    });
+  const initializeAudioContext = async () => {
+    const { ensureAudioContext } = await import('../utils/audio')
+    await ensureAudioContext(audioContextRef.current)
+    setAudioReady(true)
   }
+
 
   const initializeGame = () => {
     // Initialize Audio Context en respuesta a una interacción del usuario
     initializeAudioContext()
-    
+
     // Añadir un evento de toque para dispositivos móviles para inicializar el audio
     const handleUserInteraction = () => {
       initializeAudioContext();
       document.removeEventListener('touchstart', handleUserInteraction);
       document.removeEventListener('click', handleUserInteraction);
     };
-    
+
     document.addEventListener('touchstart', handleUserInteraction, { once: true });
     document.addEventListener('click', handleUserInteraction, { once: true });
-    
+
     setStatus('playing')
-    
+
     if (difficulty === 'easy') {
       setMessage('Escuchando la escala completa...')
       setOwlMessage(`¡Empezamos el juego! Nivel: ${getDifficultyDescription()}. ¡Tú puedes hacerlo!`)
@@ -195,10 +197,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
     setOwlMood('thinking')
     setOwlMessage('Mmm... ¿qué nota será esta vez? ¡Escucha con atención!')
-    
+
     setStatus('guessing')
     setMessage(`¿Qué nota acabo de tocar? ¡Tú puedes!`)
-    
+
     setOwlMood('encouraging')
     setOwlMessage('¡Escucha bien! Ahora haz clic en la tecla que crees que es la correcta.')
 
@@ -241,10 +243,10 @@ const GameScreen: React.FC<GameScreenProps> = ({
     }
 
     setStatus('feedback')
-    
+
     // Verificar si es la última ronda
     const isLastRound = round >= TOTAL_ROUNDS
-    
+
     // Mostrar feedback por 2.5 segundos
     setTimeout(() => {
       // Detener cualquier audio que esté reproduciéndose antes de cambiar de estado
@@ -253,13 +255,13 @@ const GameScreen: React.FC<GameScreenProps> = ({
         audioCleanupRef.current()
         audioCleanupRef.current = null
       }
-      
+
       if (isLastRound) {
         // Si es la última ronda, terminar el juego
         fetchCloseSession({ session_id: sessionId })
         fetchTrainModel({ session_id: sessionId, user_id: userId })
         userDispatch(endSession())
-        
+
         // Terminar el juego con la puntuación actualizada
         onEndGame(newScore, TOTAL_ROUNDS)
       } else {
@@ -270,7 +272,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
         setStatus('initial')
         setMessage('¡Prepárate para la siguiente nota!')
         setOwlMessage('¡Vamos por la siguiente! Cada vez lo haces mejor.')
-        
+
         // Preparar el siguiente ejercicio
         const numDistractores = getNumDistractores(difficulty)
         fetchExercise({ user_id: userId, num_distractores: numDistractores })
@@ -284,7 +286,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     if (dataExercise.correctNote && status === 'guessing') {
       // Asegurarse de que el AudioContext esté inicializado antes de reproducir
       initializeAudioContext()
-      
+
       setOwlMood('happy')
       setOwlMessage('¡Buena idea! Escucha otra vez la nota.')
       playNote(audioContextRef.current, dataExercise.correctNote, 1)
@@ -295,12 +297,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
     if (status === 'guessing') {
       // Asegurarse de que el AudioContext esté inicializado antes de reproducir
       initializeAudioContext()
-      
+
       setOwlMood('thinking')
       setMessage('Reproduciendo de nuevo...')
       setOwlMessage('Te voy a tocar la escala otra vez para que recuerdes los sonidos.')
       if (difficulty === 'easy') {
-        audioCleanupRef.current = playTriad(audioContextRef.current, () => {
+        audioCleanupRef.current = playScale(audioContextRef.current, () => {
           setMessage('¿Qué nota acabo de tocar?')
         })
       } else {
@@ -357,6 +359,22 @@ const GameScreen: React.FC<GameScreenProps> = ({
         return 'Fácil'
     }
   }
+  
+  if (!audioReady) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-blue-200 via-purple-200 to-pink-200">
+        <button
+          onClick={initializeAudioContext}
+          className="px-8 py-5 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-3xl shadow-lg hover:from-purple-700 hover:to-pink-700 transition duration-300"
+        >
+          Toca aquí para activar el sonido 🎵
+        </button>
+        <p className="mt-6 text-purple-700 font-semibold text-center max-w-xs">
+          Necesitamos que actives el sonido para que el juego funcione correctamente.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen flex flex-col items-center p-4 animate-fadeIn bg-gradient-to-br from-blue-200 via-purple-200 to-pink-200 relative overflow-hidden">
@@ -375,7 +393,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
             border-image: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #ffeaa7, #dda0dd) 1
           }
         `}</style> */}
-        
+
         <div className="flex justify-between items-center mb-8">
           <div>
             <h2 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
@@ -402,7 +420,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
             </button>
           </div>
         </div>
-        
+
         <div className="flex flex-col items-center justify-center mb-8 bg-gradient-to-br from-blue-50 to-purple-50 p-6 rounded-3xl border-2 border-blue-200">
           <div className="mt-4 text-center">
             <div className="text-6xl mb-4">
@@ -413,23 +431,23 @@ const GameScreen: React.FC<GameScreenProps> = ({
               {status === 'initial' && '🎵'}
             </div>
             <p className="text-2xl font-bold text-purple-800 mb-6">{message}</p>
-            
+
             {status === 'guessing' && (
               <div className="space-y-4">
                 <div className="flex gap-4 justify-center flex-wrap">
-                  <button 
+                  <button
                     onClick={replayCurrentNote}
                     className="px-6 py-3 bg-gradient-to-r from-blue-400 to-purple-500 text-white font-bold rounded-xl hover:from-blue-500 hover:to-purple-600 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center gap-2"
                   >
                     <Volume2 size={20} />
                     Repetir nota
                   </button>
-                  <button 
+                  <button
                     onClick={replayScale}
                     className="px-6 py-3 bg-gradient-to-r from-green-400 to-blue-500 text-white font-bold rounded-xl hover:from-green-500 hover:to-blue-600 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:scale-105 flex items-center gap-2"
                   >
                     <RotateCcw size={20} />
-                    {difficulty === 'easy' ? 'Repetir tríada' : 'Repetir escala'}
+                    {difficulty === 'easy' ? 'Repetir escala' : 'Repetir escala'}
                   </button>
                 </div>
                 {arduinoPort && (
@@ -442,7 +460,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
             )}
           </div>
         </div>
-        
+
         {/* Piano Interface */}
         {/* <p>Sesion: {sessionId || 'nada'}</p>
         <p>Nota: {dataExercise?.correctNote || 'nada'}</p>
@@ -457,7 +475,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
             showLabels={difficulty !== 'hard'} // Hide labels in hard difficulty
           />
         </div>
-        
+
         {/* Instructions */}
         {status === 'guessing' && (
           <div className="text-center text-lg text-purple-700 bg-gradient-to-br from-yellow-100 to-orange-100 p-6 rounded-2xl border-2 border-yellow-300">
@@ -475,13 +493,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
             )}
           </div>
         )}
-        
+
         {feedback && (
-          <div className={`mt-6 p-6 rounded-2xl flex items-center justify-center border-2 ${
-            feedback === 'correct' 
-              ? 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 border-green-300' 
-              : 'bg-gradient-to-r from-orange-100 to-yellow-200 text-orange-800 border-orange-300'
-          }`}>
+          <div className={`mt-6 p-6 rounded-2xl flex items-center justify-center border-2 ${feedback === 'correct'
+            ? 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 border-green-300'
+            : 'bg-gradient-to-r from-orange-100 to-yellow-200 text-orange-800 border-orange-300'
+            }`}>
             {feedback === 'correct' ? (
               <>
                 <div className="text-4xl mr-4">🎉</div>

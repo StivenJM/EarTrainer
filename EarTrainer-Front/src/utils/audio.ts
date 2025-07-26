@@ -13,7 +13,7 @@ const pianoSamples: { [key in Note]: string } = {
 };
 
 // Función para asegurar que el AudioContext esté inicializado correctamente
-export const ensureAudioContext = (audioContextRef: AudioContextRef): boolean => {
+export const ensureAudioContext = async (audioContextRef: AudioContextRef): Promise<boolean> => {
   try {
     // Si no existe el audioContext, crearlo
     if (!audioContextRef.audioContext) {
@@ -34,7 +34,7 @@ export const ensureAudioContext = (audioContextRef: AudioContextRef): boolean =>
     // En iOS y algunos navegadores, el audioContext puede estar en estado "suspended"
     // y necesita ser reanudado como respuesta a una interacción del usuario
     if (audioContextRef.audioContext.state === 'suspended') {
-      audioContextRef.audioContext.resume();
+      await audioContextRef.audioContext.resume();
     }
     
     return true;
@@ -124,15 +124,15 @@ export const playNote = (
   duration: number = 1
 ) => {
   // Asegurar que el AudioContext esté inicializado y activo
-  if (!ensureAudioContext(audioContextRef)) return;
+  if (!audioContextRef.audioContext) return;
   
   const frequency = noteFrequencies[note];
-  const oscillators = createPianoTone(audioContextRef.audioContext!, frequency, duration);
+  const oscillators = createPianoTone(audioContextRef.audioContext, frequency, duration);
   
   // Add all oscillators to active sources
   activeAudioSources.push(...oscillators);
   
-  const now = audioContextRef.audioContext!.currentTime;
+  const now = audioContextRef.audioContext.currentTime;
   
   // Start all oscillators
   oscillators.forEach(osc => {
@@ -155,7 +155,7 @@ export const playScale = (
   onComplete: () => void
 ) => {
   // Asegurar que el AudioContext esté inicializado y activo
-  if (!ensureAudioContext(audioContextRef)) {
+  if (!audioContextRef.audioContext) {
     onComplete();
     return () => {};
   }
@@ -190,7 +190,7 @@ export const playTriad = (
   onComplete: () => void
 ) => {
   // Asegurar que el AudioContext esté inicializado y activo
-  if (!ensureAudioContext(audioContextRef)) {
+  if (!audioContextRef.audioContext) {
     onComplete();
     return () => {};
   }
