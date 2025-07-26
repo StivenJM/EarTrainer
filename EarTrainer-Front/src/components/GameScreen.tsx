@@ -137,19 +137,31 @@ const GameScreen: React.FC<GameScreenProps> = ({
     }
   }
 
-  const initializeAudioContext = async () => {
+  const initializeAudioContext = () => {
     try {
-      const { ensureAudioContext } = await import('../utils/audio');
-      const ready = await ensureAudioContext(audioContextRef.current);
-      if (ready) {
-        setAudioReady(true);
-        // IMPORTANTE: Inicializar el juego inmediatamente después de activar el audio
-        if (dataExercise) {
-          initializeGame();
+      // Crear AudioContext INMEDIATAMENTE en respuesta al clic (sin async/await)
+      if (!audioContextRef.current.audioContext) {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContextClass) {
+          setAudioReady(false);
+          return;
         }
-      } else {
-        console.error('Failed to initialize audio context');
-        setAudioReady(false);
+        audioContextRef.current.audioContext = new AudioContextClass();
+        audioContextRef.current.gainNode = audioContextRef.current.audioContext.createGain();
+        audioContextRef.current.gainNode!.gain.value = 0.5;
+        audioContextRef.current.gainNode!.connect(audioContextRef.current.audioContext.destination);
+      }
+      
+      // Reanudar si está suspendido (también sincrónicamente)
+      if (audioContextRef.current.audioContext.state === 'suspended') {
+        audioContextRef.current.audioContext.resume();
+      }
+      
+      setAudioReady(true);
+      
+      // IMPORTANTE: Inicializar el juego INMEDIATAMENTE después de activar el audio
+      if (dataExercise) {
+        initializeGame();
       }
     } catch (error) {
       console.error('Error initializing audio:', error);
@@ -342,9 +354,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-blue-200 via-purple-200 to-pink-200">
         <button
-          onClick={async () => {
-            await initializeAudioContext();
-          }}
+          onClick={initializeAudioContext}
           className="px-8 py-5 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-3xl shadow-lg hover:from-purple-700 hover:to-pink-700 transition duration-300"
         >
           Toca aquí para activar el sonido 🎵

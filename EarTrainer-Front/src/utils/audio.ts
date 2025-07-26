@@ -13,7 +13,7 @@ const pianoSamples: { [key in Note]: string } = {
 };
 
 // Función para asegurar que el AudioContext esté inicializado correctamente
-export const ensureAudioContext = async (audioContextRef: AudioContextRef): Promise<boolean> => {
+export const ensureAudioContext = (audioContextRef: AudioContextRef): boolean => {
   try {
     if (!audioContextRef.audioContext) {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -24,13 +24,12 @@ export const ensureAudioContext = async (audioContextRef: AudioContextRef): Prom
       audioContextRef.gainNode.connect(audioContextRef.audioContext.destination);
     }
     
-    // CRÍTICO: En iOS, asegurarse de que el contexto se active
+    // En iOS, reanudar si está suspendido
     if (audioContextRef.audioContext.state === 'suspended') {
-      await audioContextRef.audioContext.resume();
+      audioContextRef.audioContext.resume();
     }
     
-    // Verificar que el contexto esté realmente funcionando
-    return audioContextRef.audioContext.state === 'running';
+    return audioContextRef.audioContext.state === 'running' || audioContextRef.audioContext.state === 'suspended';
   } catch (e) {
     console.error('Error ensuring audio context:', e);
     return false;
