@@ -143,14 +143,12 @@ const GameScreen: React.FC<GameScreenProps> = ({
       const ready = await ensureAudioContext(audioContextRef.current);
       if (ready) {
         setAudioReady(true);
-        // IMPORTANTE: Solo inicializar el juego DESPUÉS de que el audio esté listo
-        // y en la misma pila de llamadas de la interacción del usuario
-        setTimeout(() => {
-          if (dataExercise) {
-            initializeGame();
-          }
-        }, 100);
+        // IMPORTANTE: Inicializar el juego inmediatamente después de activar el audio
+        if (dataExercise) {
+          initializeGame();
+        }
       } else {
+        console.error('Failed to initialize audio context');
         setAudioReady(false);
       }
     } catch (error) {
@@ -160,7 +158,6 @@ const GameScreen: React.FC<GameScreenProps> = ({
   };
 
   const initializeGame = () => {
-    // NO llamar initializeAudioContext aquí - ya debe estar listo
     setStatus('playing')
 
     if (difficulty === 'easy') {
@@ -269,9 +266,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     if (!dataExercise) return
 
     if (dataExercise.correctNote && status === 'guessing') {
-      // Asegurarse de que el AudioContext esté inicializado antes de reproducir
-      initializeAudioContext()
-
+      // NO llamar initializeAudioContext aquí - ya está inicializado
       setOwlMood('happy')
       setOwlMessage('¡Buena idea! Escucha otra vez la nota.')
       playNote(audioContextRef.current, dataExercise.correctNote, 1)
@@ -280,9 +275,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   const replayScale = () => {
     if (status === 'guessing') {
-      // Asegurarse de que el AudioContext esté inicializado antes de reproducir
-      initializeAudioContext()
-
+      // NO llamar initializeAudioContext aquí - ya está inicializado
       setOwlMood('thinking')
       setMessage('Reproduciendo de nuevo...')
       setOwlMessage('Te voy a tocar la escala otra vez para que recuerdes los sonidos.')

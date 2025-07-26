@@ -46,13 +46,7 @@ const Piano: React.FC<PianoProps> = ({
 const handleKeyPress = async (note: Note) => {
   if (disabled || !availableNotes.includes(note)) return;
 
-  // Asegurarse que AudioContext está activo (resume si está suspendido)
-  const ready = await ensureAudioContext(audioContextRef.current);
-  if (!ready) {
-    console.warn('No se pudo activar AudioContext');
-    return;
-  }
-
+  // NO verificar AudioContext aquí - ya debe estar inicializado
   // Visual feedback
   setPressedKeys(prev => new Set(prev).add(note));
 
@@ -68,7 +62,7 @@ const handleKeyPress = async (note: Note) => {
     });
   }, 200);
 
-  // Reproducir nota solo después que audio está listo
+  // Reproducir nota
   playNote(audioContextRef.current, note, 0.3);
 
   // Lógica de juego
