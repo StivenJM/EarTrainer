@@ -23,11 +23,16 @@ export const ensureAudioContext = async (audioContextRef: AudioContextRef): Prom
       audioContextRef.gainNode.gain.value = 0.5;
       audioContextRef.gainNode.connect(audioContextRef.audioContext.destination);
     }
+    
+    // CRÍTICO: En iOS, asegurarse de que el contexto se active
     if (audioContextRef.audioContext.state === 'suspended') {
       await audioContextRef.audioContext.resume();
     }
-    return true;
+    
+    // Verificar que el contexto esté realmente funcionando
+    return audioContextRef.audioContext.state === 'running';
   } catch (e) {
+    console.error('Error ensuring audio context:', e);
     return false;
   }
 };

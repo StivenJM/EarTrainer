@@ -64,21 +64,6 @@ const GameScreen: React.FC<GameScreenProps> = ({
     fetchExercise({ user_id: userId, num_distractores: getNumDistractores(difficulty) })
   }, [userId])
 
-  useEffect(() => {
-    if (dataExercise && audioReady) {
-      const timer = setTimeout(() => {
-        initializeGame()
-      }, 2000)
-      return () => {
-        clearTimeout(timer)
-        stopAllAudio()
-        if (audioCleanupRef.current) {
-          audioCleanupRef.current()
-        }
-      }
-    }
-  }, [dataExercise, audioReady])
-
   // Handle Arduino input with audio feedback
   useEffect(() => {
     const handleArduinoData = (event: any) => {
@@ -153,30 +138,29 @@ const GameScreen: React.FC<GameScreenProps> = ({
   }
 
   const initializeAudioContext = async () => {
-    const { ensureAudioContext } = await import('../utils/audio');
-    const ready = await ensureAudioContext(audioContextRef.current);
-    if (ready) {
-      setAudioReady(true);
-    } else {
+    try {
+      const { ensureAudioContext } = await import('../utils/audio');
+      const ready = await ensureAudioContext(audioContextRef.current);
+      if (ready) {
+        setAudioReady(true);
+        // IMPORTANTE: Solo inicializar el juego DESPUÉS de que el audio esté listo
+        // y en la misma pila de llamadas de la interacción del usuario
+        setTimeout(() => {
+          if (dataExercise) {
+            initializeGame();
+          }
+        }, 100);
+      } else {
+        setAudioReady(false);
+      }
+    } catch (error) {
+      console.error('Error initializing audio:', error);
       setAudioReady(false);
     }
-  }
-
+  };
 
   const initializeGame = () => {
-    // Initialize Audio Context en respuesta a una interacción del usuario
-    initializeAudioContext()
-
-    // Añadir un evento de toque para dispositivos móviles para inicializar el audio
-    const handleUserInteraction = () => {
-      initializeAudioContext();
-      document.removeEventListener('touchstart', handleUserInteraction);
-      document.removeEventListener('click', handleUserInteraction);
-    };
-
-    document.addEventListener('touchstart', handleUserInteraction, { once: true });
-    document.addEventListener('click', handleUserInteraction, { once: true });
-
+    // NO llamar initializeAudioContext aquí - ya debe estar listo
     setStatus('playing')
 
     if (difficulty === 'easy') {
@@ -187,7 +171,6 @@ const GameScreen: React.FC<GameScreenProps> = ({
       })
     } else {
       setMessage('Escuchando la escala de Do Mayor...')
-      // Play full scale
       audioCleanupRef.current = playScale(audioContextRef.current, () => {
         selectRandomNote()
       })
