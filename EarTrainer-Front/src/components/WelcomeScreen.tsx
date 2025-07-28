@@ -9,7 +9,7 @@ import { useApi } from '../hooks/useApi'
 import { login, logout, startSession } from '../redux/states/user'
 import LucideLoadingSpinner from './LucideLoadingSpinner'
 import { Session, User } from '../models'
-import { createSession, CreateSessionRequest, createUser, CreateUserRequest, predictSkill, PredictSkillRequest } from '../services/api.service'
+import { createSession, CreateSessionRequest, createUser, CreateUserRequest, predictSkill, PredictSkillRequest, getSkillLevel } from '../services/api.service'
 import { Difficulty, SkillLevel } from '../types'
 
 interface WelcomeScreenProps {
@@ -27,6 +27,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStartGame, onShowHighSc
   const { error: errorUser, loading: loadingUser, fetchGlobal: fetchGlobalUser } = useApi<User, CreateUserRequest, AppDispatch>(createUser)
   const { fetchGlobal: fetchGlobalStartSession } = useApi<Session, CreateSessionRequest, AppDispatch>(createSession)
   const { data: dataPredictSkill, fetch: fetchPredictSkill } = useApi<SkillLevel, PredictSkillRequest>(predictSkill)
+  const { data: skillLevelData, fetch: fetchSkillLevel } = useApi<{ level: string }, number>(getSkillLevel)
 
   // Form inpus
   const [name, setName] = useState('')
@@ -41,9 +42,21 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStartGame, onShowHighSc
 
   const [level, setLevel] = useState('')
 
+  const handleArduinoConnection = (isConnected: boolean, port: any | null) => {
+    setIsArduinoConnected(isConnected)
+    setArduinoPort(port)
+  }
+
   useEffect(() => {
-    if (dataPredictSkill) {
-      switch (dataPredictSkill) {
+    if (userId != 0) {
+      fetchPredictSkill({ user_id: userId })
+      fetchSkillLevel(userId)
+    }
+  }, [userId])
+
+  useEffect(() => {
+    if (skillLevelData) {
+      switch (skillLevelData.level) {
         case 'beginner':
           setDifficulty('easy')
           setRecommendedDifficulty('easy')
@@ -66,18 +79,7 @@ const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ onStartGame, onShowHighSc
           break
       }
     }
-  }, [dataPredictSkill])
-
-  const handleArduinoConnection = (isConnected: boolean, port: any | null) => {
-    setIsArduinoConnected(isConnected)
-    setArduinoPort(port)
-  }
-
-  useEffect(() => {
-    if (userId != 0) {
-      fetchPredictSkill({ user_id: userId })
-    }
-  }, [userId])
+  }, [skillLevelData])
 
   const startName = () => {
     if (!name.trim()) {

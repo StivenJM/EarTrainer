@@ -10,6 +10,7 @@ import { useApi } from '../hooks/useApi'
 import { AttemptNotes } from '../models'
 import { closeSession, CloseSessionRequest, registerAttempt, RegisterAttemptRequest, suggestExercise, SuggestRequest, trainModel, TrainModelRequest } from '../services/api.service'
 import { endSession } from '../redux/states/user'
+import { getSkillLevel } from '../services/api.service'
 
 
 interface GameScreenProps {
@@ -59,6 +60,27 @@ const GameScreen: React.FC<GameScreenProps> = ({
 
   // Store cleanup functions for audio sequences
   const audioCleanupRef = useRef<(() => void) | null>(null)
+
+  // Nuevo: función para traducir el nivel a español
+  const getNivelEsp = (nivel: string) => {
+    switch (nivel) {
+      case 'beginner': return 'Principiante'
+      case 'intermediate': return 'Intermedio'
+      case 'expert': return 'Experto'
+      default: return nivel
+    }
+  }
+
+  // Nuevo estado y función para manejar el nivel del usuario
+  const [showLevelModal, setShowLevelModal] = useState(false)
+  const [userLevel, setUserLevel] = useState('')
+
+  const handleFirstAttempt = async () => {
+    // Llama al backend para obtener el nivel
+    const response = await getSkillLevel(userId).call
+    setUserLevel(response.data.level)
+    setShowLevelModal(true)
+  }
 
   useEffect(() => {
     fetchExercise({ user_id: userId, num_distractores: getNumDistractores(difficulty) })
@@ -228,6 +250,7 @@ const GameScreen: React.FC<GameScreenProps> = ({
     playNote(audioContextRef.current, dataExercise.correctNote, 1)
   }
 
+  // Elimina la llamada a handleFirstAttempt en handleNoteGuess
   const handleNoteGuess = (guessedNote: Note) => {
     if (!dataExercise) return
     if (status !== 'guessing') return
@@ -266,7 +289,6 @@ const GameScreen: React.FC<GameScreenProps> = ({
     // Verificar si es la última ronda
     const isLastRound = round >= TOTAL_ROUNDS
 
-    // Mostrar feedback por 2.5 segundos
     setTimeout(() => {
       // Detener cualquier audio que esté reproduciéndose antes de cambiar de estado
       stopAllAudio()
@@ -276,12 +298,14 @@ const GameScreen: React.FC<GameScreenProps> = ({
       }
 
       if (isLastRound) {
-        // Si es la última ronda, terminar el juego
+        // Al finalizar el juego, obtener el nivel y mostrar el modal
+        getSkillLevel(userId).call.then((response) => {
+          setUserLevel(getNivelEsp(response.data.level))
+          setShowLevelModal(true)
+        })
         fetchCloseSession({ session_id: sessionId })
         fetchTrainModel({ session_id: sessionId, user_id: userId })
         userDispatch(endSession())
-
-        // Terminar el juego con la puntuación actualizada
         onEndGame(newScore, TOTAL_ROUNDS)
       } else {
         // Si no es la última ronda, preparar la siguiente ronda
@@ -555,6 +579,31 @@ const GameScreen: React.FC<GameScreenProps> = ({
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-green-400 to-blue-500 hover:from-green-500 hover:to-blue-600 text-white font-bold rounded-xl transition-all duration-300 transform hover:scale-105"
               >
                 Seguir jugando
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal simple para mostrar el nivel del usuario SOLO al final */}
+      {showLevelModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-white via-yellow-50 to-pink-50 rounded-3xl p-8 max-w-sm mx-4 border-4 border-rainbow">
+            <div className="text-center mb-6">
+              <div className="text-6xl mb-4">🌟</div>
+              <h3 className="text-2xl font-bold text-purple-800 mb-4">
+                ¡Tu nivel actual es: {userLevel}!
+              </h3>
+              <p className="text-lg text-purple-700">
+                ¡Gracias por jugar! Sigue practicando para mejorar tu nivel musical.
+              </p>
+            </div>
+            <div className="flex justify-center">
+              <button
+                onClick={() => setShowLevelModal(false)}
+                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl shadow-lg hover:from-purple-700 hover:to-pink-700 transition duration-300"
+              >
+                Cerrar
               </button>
             </div>
           </div>
