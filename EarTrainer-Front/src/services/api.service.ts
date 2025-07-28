@@ -148,6 +148,14 @@ export const predictSkill = (p: PredictSkillRequest): ApiResponse<SkillLevel> =>
     }
 }
 
+export const getSkillLevel = (userId: number): ApiResponse<{ level: string }> => {
+    const controller = loadAbort()
+    return {
+        call: axios.get<{ level: string }>(`${VITE_API_URL}/skill/get-skill-level/${userId}`, { signal: controller.signal }),
+        controller
+    }
+}
+
 
 // Sessions
 // ---------------
